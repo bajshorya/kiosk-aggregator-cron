@@ -18,4 +18,6 @@ uuid = { version = "1", features = ["v4"] }
 dotenv = "0.15"
 rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
 async-trait = "0.1"
+ethers = { version = "2", features = ["rustls"] }
+
  

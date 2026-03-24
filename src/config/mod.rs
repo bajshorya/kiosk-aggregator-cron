@@ -7,12 +7,18 @@ pub struct GardenConfig {
     pub api_base_url: String,
     pub app_id: String,
 }
-
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RpcUrlsConfig {
+    pub ethereum_sepolia: String,
+    pub base_sepolia: String,
+    pub arbitrum_sepolia: String,
+}
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WalletConfig {
     pub bitcoin_testnet_address: String,
     pub litecoin_testnet_address: String,
     pub evm_address: String,
+    pub evm_private_key: String,
     pub starknet_address: String,
     pub solana_address: String,
     pub tron_address: String,
@@ -32,6 +38,7 @@ pub struct AppConfig {
     pub wallets: WalletConfig,
     pub scheduler: SchedulerConfig,
     pub database_url: String,
+    pub rpc_urls: RpcUrlsConfig,
 }
 
 impl AppConfig {
@@ -51,6 +58,8 @@ impl AppConfig {
                         "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd".to_string()
                     },
                 ),
+                evm_private_key: std::env::var("WALLET_EVM_PRIVATE_KEY")
+                    .expect("WALLET_EVM_PRIVATE_KEY must be set"),
                 litecoin_testnet_address: std::env::var("WALLET_LITECOIN_TESTNET")
                     .unwrap_or_else(|_| "tltc1qycexnc7fjqh2x4dnaht6gumcjxdzkdpjnlxe4s".to_string()),
                 evm_address: std::env::var("WALLET_EVM")
@@ -77,6 +86,14 @@ impl AppConfig {
                     .ok()
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(15),
+            },
+            rpc_urls: RpcUrlsConfig {
+                ethereum_sepolia: std::env::var("RPC_ETHEREUM_SEPOLIA")
+                    .unwrap_or_else(|_| "https://rpc.sepolia.org".to_string()),
+                base_sepolia: std::env::var("RPC_BASE_SEPOLIA")
+                    .unwrap_or_else(|_| "https://sepolia.base.org".to_string()),
+                arbitrum_sepolia: std::env::var("RPC_ARBITRUM_SEPOLIA")
+                    .unwrap_or_else(|_| "https://sepolia-rollup.arbitrum.io/rpc".to_string()),
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),

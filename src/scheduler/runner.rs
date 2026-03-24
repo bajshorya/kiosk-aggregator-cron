@@ -1,4 +1,8 @@
+use crate::chains::evm_signer::EvmSigner;
+use anyhow::Context;
 use std::sync::Arc;
+use tokio::sync::Mutex; // ← not std::sync::Mutex
+
 use std::time::Instant;
 
 use chrono::Utc;
@@ -8,7 +12,7 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::api::GardenApiClient;
-use crate::chains::{SwapPair, all_swap_pairs, requires_manual_deposit};
+use crate::chains::{all_swap_pairs, requires_manual_deposit, SwapPair};
 use crate::config::AppConfig;
 use crate::db::Database;
 use crate::models::{OrderAsset, RunSummary, SubmitOrderRequest, SwapRecord, SwapStatus};
@@ -17,46 +21,74 @@ pub struct SwapRunner {
     api: Arc<GardenApiClient>,
     db: Arc<Database>,
     config: AppConfig,
+    evm_lock: Arc<Mutex<()>>,
 }
 
 impl SwapRunner {
     pub fn new(api: Arc<GardenApiClient>, db: Arc<Database>, config: AppConfig) -> Self {
-        Self { api, db, config }
+        Self {
+            api,
+            db,
+            config,
+            evm_lock: Arc::new(Mutex::new(())),
+        }
     }
 
     /// Test a single swap pair by asset names
-    pub async fn test_single_swap(&self, from_asset: &str, to_asset: &str) -> Result<SwapRecord, anyhow::Error> {
+    pub async fn test_single_swap(
+        &self,
+        from_asset: &str,
+        to_asset: &str,
+    ) -> Result<SwapRecord, anyhow::Error> {
         use crate::chains::all_swap_pairs;
-        
+
         let pairs = all_swap_pairs(&self.config.wallets);
         let pair = pairs
             .iter()
             .find(|p| p.source.asset == from_asset && p.destination.asset == to_asset)
-            .ok_or_else(|| anyhow::anyhow!(
-                "Swap pair not found: {} -> {}\nUse 'list-swaps' to see available pairs",
-                from_asset,
-                to_asset
-            ))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Swap pair not found: {} -> {}\nUse 'list-swaps' to see available pairs",
+                    from_asset,
+                    to_asset
+                )
+            })?;
 
         let run_id = uuid::Uuid::new_v4().to_string();
         info!("Testing single swap: {}", pair.label());
-        
+
         let record = self.run_single_swap(&run_id, pair).await;
-        
+
         // Save to database
         let summary = crate::models::RunSummary {
             run_id: run_id.clone(),
             total_swaps: 1,
-            completed: if record.status == SwapStatus::Completed { 1 } else { 0 },
-            failed: if record.status == SwapStatus::Failed { 1 } else { 0 },
-            timed_out: if record.status == SwapStatus::TimedOut { 1 } else { 0 },
-            pending: if record.status == SwapStatus::Pending { 1 } else { 0 },
+            completed: if record.status == SwapStatus::Completed {
+                1
+            } else {
+                0
+            },
+            failed: if record.status == SwapStatus::Failed {
+                1
+            } else {
+                0
+            },
+            timed_out: if record.status == SwapStatus::TimedOut {
+                1
+            } else {
+                0
+            },
+            pending: if record.status == SwapStatus::Pending {
+                1
+            } else {
+                0
+            },
             started_at: record.started_at,
             results: vec![record.clone()],
         };
-        
+
         let _ = self.db.insert_run_summary(&summary);
-        
+
         Ok(record)
     }
 
@@ -72,15 +104,21 @@ impl SwapRunner {
 
         // Spawn all swaps as concurrent tasks
         let mut set: JoinSet<SwapRecord> = JoinSet::new();
-        
+
         for pair in pairs {
             let api = Arc::clone(&self.api);
             let db = Arc::clone(&self.db);
             let config = self.config.clone();
             let run_id_c = run_id.clone();
-            
+
+            let evm_lock = Arc::clone(&self.evm_lock);
             set.spawn(async move {
-                let runner = SwapRunner { api, db, config };
+                let runner = SwapRunner {
+                    api,
+                    db,
+                    config,
+                    evm_lock,
+                };
                 runner.run_single_swap(&run_id_c, &pair).await
             });
         }
@@ -219,18 +257,27 @@ impl SwapRunner {
                 );
             }
         }
+        let init_result = self
+            .dispatch_initiation(&pair.source.asset, &order_resp.result)
+            .await;
+        match init_result {
+            Ok(hash) => {
+                info!(pair = %pair.label(), tx = %hash, "Source initiation sent");
+                record.source_initiate_tx = Some(hash);
+            }
+            Err(e) => {
+                if !requires_manual_deposit(&pair.source.asset) {
+                    return self.fail(record, format!("Initiation failed: {}", e));
+                }
+                // manual deposit chains: log and continue polling
+                warn!(pair = %pair.label(), "Awaiting manual deposit: {}", e);
+            }
+        }
 
-        // Log EVM transaction data
+        // Log EVM transaction data (keep for debugging)
         if let Some(ref tx) = order_resp.result.initiate_transaction {
             info!(pair = %pair.label(), "EVM initiate_transaction: {}",
                 serde_json::to_string(tx).unwrap_or_default());
-        }
-        if let Some(ref vtx) = order_resp.result.versioned_tx {
-            info!(
-                pair = %pair.label(),
-                "Solana versioned_tx ({} chars)",
-                vtx.len()
-            );
         }
 
         if let Err(e) = self.db.update_swap_record(&record) {
@@ -257,7 +304,11 @@ impl SwapRunner {
                 );
                 let now = Utc::now();
                 record.status = SwapStatus::TimedOut;
-                record.error_message = Some(format!("Timed out after {}s ({} polls)", timeout.as_secs(), poll_count));
+                record.error_message = Some(format!(
+                    "Timed out after {}s ({} polls)",
+                    timeout.as_secs(),
+                    poll_count
+                ));
                 record.completed_at = Some(now);
                 record.duration_secs = Some((now - record.started_at).num_seconds());
                 let _ = self.db.update_swap_record(&record);
@@ -337,7 +388,74 @@ impl SwapRunner {
             }
         }
     }
+    async fn dispatch_initiation(
+        &self,
+        source_asset: &str,
+        order_result: &crate::models::SubmitOrderResult,
+    ) -> Result<String, anyhow::Error> {
+        let chain = source_asset.split(':').next().unwrap_or("");
 
+        match chain {
+            c if c.starts_with("ethereum_")
+                || c.starts_with("base_")
+                || c.starts_with("arbitrum_") =>
+            {
+                let _guard = self.evm_lock.lock(); // ← serializes all EVM txs
+                let rpc_url = self.rpc_url_for_chain(c)?;
+                let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone());
+
+                if let Some(approval_tx) = order_result.approval_transaction.as_ref() {
+                    info!("Sending approval tx for {}", source_asset);
+                    let approval_hash = signer
+                        .execute_initiate_tx(approval_tx, &rpc_url)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Approval tx failed: {}", e))?;
+                    info!("Approval tx sent: {}", approval_hash);
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                }
+
+                let tx_data = order_result
+                    .initiate_transaction
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No initiate_transaction in response"))?;
+
+                let hash = signer
+                    .execute_initiate_tx(tx_data, &rpc_url)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Initiate tx failed: {}", e))?;
+
+                Ok(hash)
+            }
+            c if c.starts_with("tron_") => Err(anyhow::anyhow!("Tron signing not yet implemented")),
+
+            c if c.starts_with("starknet_") => {
+                Err(anyhow::anyhow!("Starknet signing not yet implemented"))
+            }
+
+            c if c.starts_with("solana_") => {
+                Err(anyhow::anyhow!("Solana signing not yet implemented"))
+            }
+
+            c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => order_result
+                .to
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No deposit address returned")),
+
+            _ => Err(anyhow::anyhow!("Unknown chain: {}", chain)),
+        }
+    }
+
+    fn rpc_url_for_chain(&self, chain: &str) -> Result<String, anyhow::Error> {
+        match chain {
+            "ethereum_sepolia" => Ok(self.config.rpc_urls.ethereum_sepolia.clone()),
+            "base_sepolia" => Ok(self.config.rpc_urls.base_sepolia.clone()),
+            "arbitrum_sepolia" => Ok(self.config.rpc_urls.arbitrum_sepolia.clone()),
+            _ => Err(anyhow::anyhow!(
+                "No RPC URL configured for chain: {}",
+                chain
+            )),
+        }
+    }
     fn fail(&self, mut record: SwapRecord, message: String) -> SwapRecord {
         error!(pair = %record.swap_pair, "❌ {}", message);
         let now = Utc::now();

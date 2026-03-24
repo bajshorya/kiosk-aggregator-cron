@@ -1,5 +1,5 @@
+pub mod evm_signer;
 use crate::config::WalletConfig;
-
 #[derive(Debug, Clone)]
 pub struct ChainAsset {
     pub asset: String,
@@ -52,51 +52,127 @@ pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
     // LTC: 1000000 sats (~$50 at $50 LTC)
     // SOL: 350000000 (~$50 at $140 SOL)
     // Note: API enforces minimum of 50000 to 1000000 range
-    
+
     vec![
         // ═══ PHASE 1: Start with EVM assets (no manual deposit) ═══
         // Cost: $50 (you already have WBTC on EVM)
-        pair!("ethereum_sepolia:wbtc", "50000", evm, "base_sepolia:wbtc", evm),
-        
+        pair!(
+            "ethereum_sepolia:wbtc",
+            "50000",
+            evm,
+            "base_sepolia:wbtc",
+            evm
+        ),
         // ═══ PHASE 2: Use received Base WBTC for more EVM swaps ═══
         // Cost: $0 (using received funds)
-        pair!("base_sepolia:wbtc", "50000", evm, "arbitrum_sepolia:wbtc", evm),
-        pair!("base_sepolia:wbtc", "50000", evm, "ethereum_sepolia:wbtc", evm),
-        
+        pair!(
+            "base_sepolia:wbtc",
+            "50000",
+            evm,
+            "arbitrum_sepolia:wbtc",
+            evm
+        ),
+        pair!(
+            "base_sepolia:wbtc",
+            "50000",
+            evm,
+            "ethereum_sepolia:wbtc",
+            evm
+        ),
         // ═══ PHASE 3: Use Arbitrum WBTC ═══
         // Cost: $0 (using received funds)
-        pair!("arbitrum_sepolia:wbtc", "50000", evm, "base_sepolia:wbtc", evm),
-        
+        pair!(
+            "arbitrum_sepolia:wbtc",
+            "50000",
+            evm,
+            "base_sepolia:wbtc",
+            evm
+        ),
         // ═══ PHASE 4: EVM to Bitcoin (test reverse flow) ═══
         // Cost: $0 (using received funds)
-        pair!("ethereum_sepolia:wbtc", "50000", evm, "bitcoin_testnet:btc", btc),
-        pair!("base_sepolia:wbtc", "50000", evm, "bitcoin_testnet:btc", btc),
-        
+        pair!(
+            "ethereum_sepolia:wbtc",
+            "50000",
+            evm,
+            "bitcoin_testnet:btc",
+            btc
+        ),
+        pair!(
+            "base_sepolia:wbtc",
+            "50000",
+            evm,
+            "bitcoin_testnet:btc",
+            btc
+        ),
         // ═══ PHASE 5: Bitcoin to EVM (requires manual deposit) ═══
         // Cost: $150 (3 × $50 BTC deposits)
-        pair!("bitcoin_testnet:btc", "50000", btc, "base_sepolia:wbtc", evm),
-        pair!("bitcoin_testnet:btc", "50000", btc, "ethereum_sepolia:wbtc", evm),
-        pair!("bitcoin_testnet:btc", "50000", btc, "arbitrum_sepolia:wbtc", evm),
-        
+        pair!(
+            "bitcoin_testnet:btc",
+            "50000",
+            btc,
+            "base_sepolia:wbtc",
+            evm
+        ),
+        pair!(
+            "bitcoin_testnet:btc",
+            "50000",
+            btc,
+            "ethereum_sepolia:wbtc",
+            evm
+        ),
+        pair!(
+            "bitcoin_testnet:btc",
+            "50000",
+            btc,
+            "arbitrum_sepolia:wbtc",
+            evm
+        ),
         // ═══ PHASE 6: Litecoin (requires manual deposit) ═══
         // Cost: $50 (1 × $50 LTC deposit)
-        pair!("litecoin_testnet:ltc", "1000000", ltc, "base_sepolia:wbtc", evm),
-        
+        // pair!("litecoin_testnet:ltc", "1000000", ltc, "base_sepolia:wbtc", evm),
+
         // ═══ PHASE 7: Solana (requires manual deposit or existing balance) ═══
         // Cost: $100 (2 × $50 SOL)
-        pair!("solana_testnet:sol", "350000000", sol, "bitcoin_testnet:btc", btc),
-        pair!("solana_testnet:sol", "350000000", sol, "base_sepolia:wbtc", evm),
-        
+        pair!(
+            "solana_testnet:sol",
+            "350000000",
+            sol,
+            "bitcoin_testnet:btc",
+            btc
+        ),
+        pair!(
+            "solana_testnet:sol",
+            "350000000",
+            sol,
+            "base_sepolia:wbtc",
+            evm
+        ),
         // ═══ PHASE 8: Starknet (requires manual deposit or existing balance) ═══
         // Cost: $100 (2 × $50 WBTC on Starknet)
-        pair!("starknet_sepolia:wbtc", "50000", stark, "bitcoin_testnet:btc", btc),
-        pair!("starknet_sepolia:wbtc", "50000", stark, "base_sepolia:wbtc", evm),
-        
+        pair!(
+            "starknet_sepolia:wbtc",
+            "50000",
+            stark,
+            "bitcoin_testnet:btc",
+            btc
+        ),
+        pair!(
+            "starknet_sepolia:wbtc",
+            "50000",
+            stark,
+            "base_sepolia:wbtc",
+            evm
+        ),
         // ═══ PHASE 9: Tron (requires manual deposit or existing balance) ═══
         // Cost: $100 (2 × $50 WBTC on Tron)
-        pair!("tron_shasta:wbtc", "50000", tron, "arbitrum_sepolia:wbtc", evm),
+        pair!(
+            "tron_shasta:wbtc",
+            "50000",
+            tron,
+            "arbitrum_sepolia:wbtc",
+            evm
+        ),
         pair!("tron_shasta:wbtc", "50000", tron, "base_sepolia:wbtc", evm),
-        
         // ═══ PHASE 10: Sui (currently failing - skip or fix asset name) ═══
         // Cost: $100 (2 × $50 SUI) - DISABLED due to API error
         // pair!("sui_testnet:sui", "3000000000", sui, "bitcoin_testnet:btc", btc),
