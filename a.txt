@@ -1,0 +1,1354 @@
+I am making a backend for testing swaps of graden.finance using its api docs, so basically I will test swaps of every chain with each other. I am making this so that if any error or failure is caught while a swap, we can catch it and fix it so that failure doesn't occur with a real user or environment. This process will run every 5 hrs (cron job), i.e., every swap will be done in every 5 hrs again. I will use the garden api docs of every chain. I will provide you with every doc. Make a rust backend for this in rust. 
+Quickstart
+
+
+Use Garden’s API to get quotes, submit orders, and track their status. This guide provides a quick overview of the core API endpoints.
+This guide uses a testing app ID. Planning to build a production app with our API? Reach out to us in the Townhall.
+From Bitcoin
+Get Quote
+
+Let’s get a quote to trade 0.0005 BTC on Bitcoin Testnet4 to WBTC on Base Sepolia.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=bitcoin_testnet:btc&to=base_sepolia:wbtc&from_amount=50000' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'                
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "bitcoin_testnet:btc",
+            "amount": "50000",
+            "display": "0.00050000",
+            "value": "58.8200"
+        },
+        "destination": {
+            "asset": "base_sepolia:wbtc",
+            "amount": "49850",
+            "display": "0.00049850",
+            "value": "58.6435"
+        },
+        "solver_id": "0x9dd9c2d208b07bf9a4ef9ca311f36d7185749635",
+        "estimated_time": 600,
+        "slippage": 50,
+        "fee": 30,
+        "fixed_fee": "0.0"
+        }
+    ]
+}
+
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+    --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "source": {
+            "asset": "bitcoin_testnet:btc",
+            "owner": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "amount": "50000"
+        },
+        "destination": {
+            "asset": "base_sepolia:wbtc",
+            "owner": "0x004Cc75ACF4132Fc08cB6a252E767804F303F729",
+            "amount": "49850"
+        }
+    }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "order_id": "f8a12d1320fce93c5888b6014abeb5f5de85ecc8c0eef8133f3da03822592121",
+        "to": "tb1ptt49v22dcst7mquwfsmcu2t56xjg07whtcgufvhjuj5zu89y6q0qn8fvfp",
+        "amount": "50000"
+    }
+}
+Send 0.0005 BTC to the to address in the response. You may use our faucet on testnet.
+3
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/f8a12d1320fce93c5888b6014abeb5f5de85ecc8c0eef8133f3da03822592121' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'                
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2025-07-09T04:38:18.632122Z",
+        "source_swap": {
+            "created_at": "2025-07-09T04:38:18.632122Z",
+            "swap_id": "tb1ptt49v22dcst7mquwfsmcu2t56xjg07whtcgufvhjuj5zu89y6q0qn8fvfp",
+            "chain": "bitcoin_testnet",
+            "asset": "bitcoin_testnet:btc",
+            "initiator": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "redeemer": "460f2e8ff81fc4e0a8e6ce7796704e3829e3e3eedb8db9390bdc51f4f04cf0a6",
+            "delegate": "8f716d079bd4a6cb5c47a24cd22c352ffb50089e4461043cfe3b1f0f9082eec8",
+            "timelock": 144,
+            "filled_amount": "500000",
+            "asset_price": 108468.0,
+            "amount": "500000",
+            "secret_hash": "3c4522983261f81e2e679346bbda5dddd8b4ea0367dd4073f73f13320d9dee62",
+            "secret": "8cb8a02d5592b0b1556978e1d778b7eff2c23519b8aa65970fa6ac3daa33fb40",
+            "instant_refund_tx": "020000000001013a18563d08a2b7d596488a96065466f52a82c221b981492b1f35b999401de1660000000000ffffffff0120a1070000000000225120a847e3c1d09e9e4af217cbe8c51f600802131ac9b1b8a7727493b4de60fc9ca3044107583b76a92f651f9bb3a34189cd1b81b7f98f99d1ebc71ba313e72c441a96270707d0fda5cacb0b1de2daacae318fa8c44b35881dc0ffd92764c8e1ce0a7bef834107583b76a92f651f9bb3a34189cd1b81b7f98f99d1ebc71ba313e72c441a96270707d0fda5cacb0b1de2daacae318fa8c44b35881dc0ffd92764c8e1ce0a7bef8346208f716d079bd4a6cb5c47a24cd22c352ffb50089e4461043cfe3b1f0f9082eec8ac20460f2e8ff81fc4e0a8e6ce7796704e3829e3e3eedb8db9390bdc51f4f04cf0a6ba529c61c02160e11a135f94e536a5b222e5d09fd9db1be5f5f5e753920290c0410cf388f09023174326647e3e2f5e7b7023a678341cd85556bfe7f539cdd369fd2ab1729114a7bc658045926f1b2c0e0e70292c66bda90ddbbee9e2ba771a4e0a57054bbc00000000",
+            "initiate_tx_hash": "66e11d4099b9351f2b4981b921c2822af5665406968a4896d5b7a2083d56183a:90249",
+            "redeem_tx_hash": "7820a77ecd05f4182a0a5595e8364e221bdb1a440507d53bf20c5f658ae3cd67",
+            "refund_tx_hash": "",
+            "initiate_block_number": "90249",
+            "redeem_block_number": "90259",
+            "refund_block_number": "0",
+            "required_confirmations": 1,
+            "current_confirmations": 1,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2025-07-09T04:38:18.632122Z",
+            "swap_id": "3ab702b4db8f9b54f56d4ceeab7811ee02447785605a2c5b8df7dcc071efed91",
+            "chain": "base_sepolia",
+            "asset": "base_sepolia:wbtc",
+            "initiator": "0x661bA32eb5f86CaB358DDbB7F264b10c5825e2dd",
+            "redeemer": "0x004Cc75ACF4132Fc08cB6a252E767804F303F729",
+            "timelock": 3600,
+            "filled_amount": "498500",
+            "asset_price": 108468.0,
+            "amount": "498500",
+            "secret_hash": "3c4522983261f81e2e679346bbda5dddd8b4ea0367dd4073f73f13320d9dee62",
+            "secret": "8cb8a02d5592b0b1556978e1d778b7eff2c23519b8aa65970fa6ac3daa33fb40",
+            "initiate_tx_hash": "0xfb354436bbd8bd57760d82bfb441442e796e60aa7f8cd9e0978aa94a73eab2b8",
+            "redeem_tx_hash": "0x7b3d81b0caddadbb35a9cf717b5f23b2ceddfa7a1a5251b2dbee723247cffdd6",
+            "refund_tx_hash": "",
+            "initiate_block_number": "28133930",
+            "redeem_block_number": "28133933",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": "2025-07-09T04:42:28Z",
+            "redeem_timestamp": "2025-07-09T04:42:34Z",
+            "refund_timestamp": null
+        },
+        "nonce": "1751978328975",
+        "order_id": "f8a12d1320fce93c5888b6014abeb5f5de85ecc8c0eef8133f3da03822592121",
+        "affiliate_fees": [],
+        "version": "v2",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d",
+        "integrator": "DocsTesting"
+    }
+}
+The swap is complete once the order.destination_swap.redeem_tx_hash field is populated.
+
+.........From Litecoin
+
+
+Get Quote
+
+Let’s get a quote to trade 0.01 LTC on Litecoin Testnet to WBTC on Base Sepolia.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=litecoin_testnet:ltc&to=base_sepolia:wbtc&from_amount=1000000' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'                
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "litecoin_testnet:ltc",
+            "amount": "1000000",
+            "display": "0.01000000",
+            "value": "0.7239"
+        },
+        "destination": {
+            "asset": "base_sepolia:wbtc",
+            "amount": "755",
+            "display": "0.00000755",
+            "value": "0.7218"
+        },
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d",
+        "estimated_time": 20,
+        "slippage": 0,
+        "fee": 30,
+        "fixed_fee": "0"
+        }
+    ]
+}
+
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+    --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "source": {
+            "asset": "litecoin_testnet:ltc",
+            "owner": "tltc1qycexnc7fjqh2x4dnaht6gumcjxdzkdpjnlxe4s",
+            "amount": "1000000"
+        },
+        "destination": {
+            "asset": "base_sepolia:wbtc",
+            "owner": "0x004Cc75ACF4132Fc08cB6a252E767804F303F729",
+            "amount": "755"
+        }
+    }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "order_id": "353e76a02a46c493a600f0a35e7e873dab370633f16f1d27af2570fc12ada3e8",
+        "to": "tltc1p9am469q2d6mfpkgrlgpd4c7tzv2lv5rug2yn9vz6vx0myj9jr5kqrc76rt",
+        "amount": "1000000"
+    }
+}
+
+Send 0.01 LTC to the to address in the response. You may use this faucet on testnet.
+3
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/353e76a02a46c493a600f0a35e7e873dab370633f16f1d27af2570fc12ada3e8' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'                
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2026-01-08T06:03:46.125199Z",
+        "source_swap": {
+            "created_at": "2026-01-08T06:03:46.125199Z",
+            "swap_id": "tltc1pqujpwdy2syf0agyyeg8xn0nwhy8qjxe9sqchmv563q7up9cgzc5q5cdl6s",
+            "chain": "litecoin_testnet",
+            "asset": "litecoin_testnet:ltc",
+            "initiator": "c3989e1d1359c83db04785c14ee84f05210acc3bb4d270619559632869c15c3b",
+            "redeemer": "2623c14333640ab262b4dda40382e64da8c20e78e98d597e218568fb5fe3e283",
+            "timelock": 144,
+            "filled_amount": "1000000",
+            "asset_price": 81.64041962329875,
+            "amount": "1000000",
+            "secret_hash": "81e8dd7fd72d336f2ac3fbdece4d046054d0d114c511bf831cf4df61097c9aa5",
+            "secret": "197b2e1e1105c9bec013e9a081dd13378855bd7a3b65b3fcd396a0d965bc506f",
+            "initiate_tx_hash": "6dc881199ce0fac5287cf55761dceec7347bbb328fe6fc7f13207afe06f5f3f6:4512211",
+            "redeem_tx_hash": "c6d176a2be224686e43cc837bd70f05b64711b314aa91015c42b8a31a7f35ce1",
+            "refund_tx_hash": "",
+            "initiate_block_number": "4512211",
+            "redeem_block_number": "4512212",
+            "refund_block_number": "0",
+            "required_confirmations": 1,
+            "current_confirmations": 1,
+            "initiate_timestamp": "2026-01-08T06:08:10Z",
+            "redeem_timestamp": "2026-01-08T06:12:39Z",
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2026-01-08T06:03:46.125199Z",
+            "swap_id": "8334288fa1924abe3c89bbc709e95f8caae605534a6cd268315f943d6bd72c19",
+            "chain": "base_sepolia",
+            "asset": "base_sepolia:wbtc",
+            "initiator": "0x133C4FCaBf1e79AE04100da0cDEC281a82ca226C",
+            "redeemer": "0xf519fa84c50E3459a570a1a514d2eaA960AFf934",
+            "timelock": 3600,
+            "filled_amount": "896",
+            "asset_price": 90802.0,
+            "amount": "896",
+            "secret_hash": "81e8dd7fd72d336f2ac3fbdece4d046054d0d114c511bf831cf4df61097c9aa5",
+            "secret": "197b2e1e1105c9bec013e9a081dd13378855bd7a3b65b3fcd396a0d965bc506f",
+            "initiate_tx_hash": "0xa28991ceecde416fd5acec5863ce0688d6e2500af2f94156ed4baf22a3b04f36",
+            "redeem_tx_hash": "0x2c4c740be46277f4ac9b12b438f9278fd49ca403c742a0860ad0cd10ab04d381",
+            "refund_tx_hash": "",
+            "initiate_block_number": "36042112",
+            "redeem_block_number": "36042116",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": "2026-01-08T06:08:32Z",
+            "redeem_timestamp": "2026-01-08T06:08:40Z",
+            "refund_timestamp": null
+        },
+        "nonce": "1767852225934",
+        "order_id": "353e76a02a46c493a600f0a35e7e873dab370633f16f1d27af2570fc12ada3e8",
+        "affiliate_fees": [],
+        "integrator": "DocsTesting",
+        "version": "v3",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d"
+    }
+}
+
+The swap is complete once the order.destination_swap.redeem_tx_hash field is populated.
+
+From EVM
+
+Get Quote
+
+Let’s get a quote to trade 0.0005 WBTC on Ethereum Sepolia to BTC on Bitcoin Testnet4.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=ethereum_sepolia:wbtc&to=bitcoin_testnet:btc&from_amount=50000' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'                
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "ethereum_sepolia:wbtc",
+            "amount": "50000",
+            "display": "0.00050000",
+            "value": "58.8700"
+        },
+        "destination": {
+            "asset": "bitcoin_testnet:btc",
+            "amount": "49850",
+            "display": "0.00049850",
+            "value": "58.6933"
+        },
+        "solver_id": "0x9dd9c2d208b07bf9a4ef9ca311f36d7185749635",
+        "estimated_time": 20,
+        "slippage": 50,
+        "fee": 30,
+        "fixed_fee": "0.0"
+        }
+    ]
+}
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+        --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+        --header 'Content-Type: application/json' \
+        --data '{
+            "source": {
+                "asset": "ethereum_sepolia:wbtc",
+                "owner": "0x4cD3FB4a504cc978f316a81Dc5165D2C5b30592d",
+                "amount": "50000"
+            },
+            "destination": {
+                "asset": "bitcoin_testnet:btc",
+                "owner": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+                "amount": "49850"
+            }
+        }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "approval_transaction": {
+            "chain_id": 11155111,
+            "data": "0x095ea7b3000000000000000000000000d1e0ba2b165726b3a6051b765d4564d030fdcf50ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "gas_limit": "0xea60",
+            "to": "0xe918a5a47b8e0afac2382bc5d1e981613e63fb07",
+            "value": "0x0"
+        },
+        "initiate_transaction": {
+            "chain_id": 11155111,
+            "data": "0x97ffc7ae000000000000000000000000661ba32eb5f86cab358ddbb7f264b10c5825e2dd0000000000000000000000000000000000000000000000000000000000001c20000000000000000000000000000000000000000000000000000000000000c3507b32dd44045d8d6fc477615d0d72f42fc7696078e44724fe64c85b563fc8f306",
+            "gas_limit": "0x493e0",
+            "to": "0xd1e0ba2b165726b3a6051b765d4564d030fdcf50",
+            "value": "0x0"
+        },
+        "order_id": "7e69c6514fa6c7a46b88e235e484d9958029cbe748e125add69b1ffcf7265198",
+        "typed_data": {
+            "domain": {
+                "chainId": "0xaa36a7",
+                "name": "HTLC",
+                "verifyingContract": "0xd1e0ba2b165726b3a6051b765d4564d030fdcf50",
+                "version": "3"
+            },
+            "message": {
+                "amount": "0xc350",
+                "redeemer": "0x661ba32eb5f86cab358ddbb7f264b10c5825e2dd",
+                "secretHash": "0x7b32dd44045d8d6fc477615d0d72f42fc7696078e44724fe64c85b563fc8f306",
+                "timelock": "0x1c20"
+            },
+            "primaryType": "Initiate",
+            "types": {
+                "EIP712Domain": [
+                    {
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "name": "version",
+                        "type": "string"
+                    },
+                    {
+                        "name": "chainId",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "verifyingContract",
+                        "type": "address"
+                    }
+                ],
+                "Initiate": [
+                    {
+                        "name": "redeemer",
+                        "type": "address"
+                    },
+                    {
+                        "name": "timelock",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "amount",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "secretHash",
+                        "type": "bytes32"
+                    }
+                ]
+            }
+        }
+    }
+}
+Then deposit the funds:
+Submit transaction
+await window.ethereum.request({
+    method: 'eth_sendTransaction', 
+    params: [response.result.transaction]
+});
+
+Gasless submission
+// Sign typed data.
+const signature = await window.ethereum.request({
+    method: 'eth_signTypedData_v4',
+    params: [userAddress, JSON.stringify(response.result.typed_data)]
+});
+
+// Initiate the swap with the signature.
+await fetch(`https://testnet.api.garden.finance/v2/orders/${response.result.order_id}?action=initiate`, {
+    method: 'PATCH',
+    headers: {
+        'garden-app-id': 'f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796',
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ signature })
+});
+
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/7e69c6514fa6c7a46b88e235e484d9958029cbe748e125add69b1ffcf7265198' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2025-09-01T06:48:02.138492Z",
+        "source_swap": {
+            "created_at": "2025-09-01T06:48:02.138492Z",
+            "swap_id": "f511550e9629124790646668b8cdc2a42bbdc9b9333857c4fdd3f1bf514b6575",
+            "chain": "ethereum_sepolia",
+            "asset": "ethereum_sepolia:wbtc",
+            "initiator": "0x4cD3FB4a504cc978f316a81Dc5165D2C5b30592d",
+            "redeemer": "0x661bA32eb5f86CaB358DDbB7F264b10c5825e2dd",
+            "timelock": 7200,
+            "filled_amount": "0",
+            "asset_price": 108107,
+            "amount": "50000",
+            "secret_hash": "7b32dd44045d8d6fc477615d0d72f42fc7696078e44724fe64c85b563fc8f306",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 1,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2025-09-01T06:48:02.138492Z",
+            "swap_id": "tb1peepw3gum369qfu7zgnd6jq5sk77q5wyuzmznlpavzmeq8x72kcyqr66rxg",
+            "chain": "bitcoin_testnet",
+            "asset": "bitcoin_testnet:btc",
+            "initiator": "460f2e8ff81fc4e0a8e6ce7796704e3829e3e3eedb8db9390bdc51f4f04cf0a6",
+            "redeemer": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "delegate": "03f4776668ef95e35ff2d51d8c59eb7a461bb2354b540553d8455dbec91087c1",
+            "timelock": 12,
+            "filled_amount": "0",
+            "asset_price": 108107,
+            "amount": "49850",
+            "secret_hash": "7b32dd44045d8d6fc477615d0d72f42fc7696078e44724fe64c85b563fc8f306",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "nonce": "4326423548464636342",
+        "order_id": "7e69c6514fa6c7a46b88e235e484d9958029cbe748e125add69b1ffcf7265198",
+        "affiliate_fees": [],
+        "integrator": "DocsTesting",
+        "version": "v3",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d"
+    }
+}
+From Tron
+
+Get Quote
+
+Let’s get a quote to trade 0.0005 WBTC on Tron Shasta to WBTC on Arbitrum Sepolia.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=tron_shasta:wbtc&to=arbitrum_sepolia:wbtc&from_amount=50000' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "tron_shasta:wbtc",
+            "amount": "50000",
+            "display": "0.00050000",
+            "value": "50.00"
+        },
+        "destination": {
+            "asset": "arbitrum_sepolia:wbtc",
+            "amount": "49850",
+            "display": "0.00049850",
+            "value": "49.85"
+        },
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d",
+        "estimated_time": 20,
+        "slippage": 0,
+        "fee": 30,
+        "fixed_fee": "0"
+        }
+    ]
+}
+
+2
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+        --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+        --header 'Content-Type: application/json' \
+        --data '{
+            "source": {
+                "asset": "tron_shasta:wbtc",
+                "owner": "TWbEz5ibiL6dreiLJ5oBF5CwDkw6Xfe6KX",
+                "amount": "50000"
+            },
+            "destination": {
+                "asset": "arbitrum_sepolia:wbtc",
+                "owner": "0xA39ABb978cfd2ba459163ad1EaB6E8940Fbf4359",
+                "amount": "49850"
+            }
+        }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "approval_transaction": {
+            "chain_id": 2494104990,
+            "data": "0x095ea7b30000000000000000000000001ce431493d15db597bbc1c74ae09407a76f19458ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "gas_limit": "500000000",
+            "to": "TCbyHXPZ2o3qPfQUSrqPoS3NkwEJ94P3AS",
+            "value": "0"
+        },
+        "initiate_transaction": {
+            "chain_id": 2494104990,
+            "data": "0x4ede0ab70000000000000000000000006b887db9741368e35c2e986a2bdae326632d06f80000000000000000000000000000000000000000000000000000000000069780000000000000000000000000000000000000000000000000000000012a05f200df8f1793684d3bbbd41aa803c8180807977e2aa33b67f63a7addbcf16831e15800000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000",
+            "gas_limit": "500000000",
+            "to": "TCbyHXPZ2o3qPfQUSrqPoS3NkwEJ94P3AS",
+            "value": "0"
+        },
+        "order_id": "23a75a6030f2cfe9381ccb78788513a0b82b1a2bb912145ca89af8c123cf3e2d",
+        "typed_data": {
+            "domain": {
+                "chainId": "2494104990",
+                "name": "HTLC",
+                "verifyingContract": "TCbyHXPZ2o3qPfQUSrqPoS3NkwEJ94P3AS",
+                "version": "3"
+            },
+            "message": {
+                "amount": "5000000000",
+                "destinationData": "0x",
+                "redeemer": "TKmnp9reskx58cYACSzvbXDBr7hKFh7XHS",
+                "secretHash": "9bf64d0cd7a8f0d254dcc48724e4d2969fdf8dfc25619bc622a3bcecb33e29c8",
+                "timelock": 432000
+            },
+            "primaryType": "Initiate",
+            "types": {
+                "EIP712Domain": [
+                    {
+                        "name": "name",
+                        "type": "string"
+                    },
+                    {
+                        "name": "version",
+                        "type": "string"
+                    },
+                    {
+                        "name": "chainId",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "verifyingContract",
+                        "type": "address"
+                    }
+                ],
+                "Initiate": [
+                    {
+                        "name": "redeemer",
+                        "type": "address"
+                    },
+                    {
+                        "name": "timelock",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "amount",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "secretHash",
+                        "type": "bytes32"
+                    },
+                    {
+                        "name": "destinationData",
+                        "type": "bytes"
+                    }
+                ]
+            }
+        }
+    }
+}
+
+Then deposit the funds:
+Submit transaction
+// Dependencies: "tronweb": "6.0.4"
+// Approval transaction
+const dataWithoutSelector = '0x' + response.result.approval_transaction.data.slice(10);
+const params = window.tronWeb.utils.abi.decodeParams(
+    ['spender', 'amount'],
+    ['address', 'uint256'],
+    dataWithoutSelector,
+    false,
+);
+const approval_transaction = await window.tronWeb.transactionBuilder.triggerSmartContract(
+    response.result.approval_transaction.to,
+    'approve(address,uint256)',
+    { feeLimit: parseInt(response.result.approval_transaction.gas_limit), callValue: parseInt(response.result.approval_transaction.value) },
+    [
+        { type: 'address', value: params.spender },
+        { type: 'uint256', value: params.amount.toString() },
+    ],
+    window.tronWeb.defaultAddress.base58
+);
+const approval_signedTx = await window.tronWeb.trx.sign(approval_transaction.transaction);
+const approval_broadcastResult = await window.tronWeb.trx.sendRawTransaction(approval_signedTx);
+
+// Initiate transaction
+const initiate_transaction = await window.tronWeb.transactionBuilder.triggerSmartContract(
+    response.result.initiate_transaction.to,
+    'initiate(address,uint256,uint256,bytes32,bytes)',
+    {
+        feeLimit: parseInt(response.result.initiate_transaction.gas_limit),
+        callValue: parseInt(response.result.initiate_transaction.value)
+    },
+    [
+        { type: 'address', value: response.result.typed_data.message.redeemer },
+        { type: 'uint256', value: response.result.typed_data.message.timelock },
+        { type: 'uint256', value: response.result.typed_data.message.amount },
+        { type: 'bytes32', value: toBytes32Hex(String(response.result.typed_data.message.secretHash)) },
+        { type: 'bytes', value: response.result.typed_data.message.destinationData },
+    ],
+    window.tronWeb.defaultAddress.base58
+);
+const initiate_signedTx = await window.tronWeb.trx.sign(initiate_transaction.transaction);
+const initiate_broadcastResult = await window.tronWeb.trx.sendRawTransaction(initiate_signedTx);
+
+Gasless submission
+// Dependencies: "tronweb": "6.0.4"
+const typedData = response.result.typed_data;
+const types = { ...typedData.types };
+delete types.EIP712Domain;
+types.Initiate = types.Initiate.filter(
+    (field) => field.name !== 'destinationData'
+);
+const message = { ...typedData.message };
+delete message.destinationData;
+// Sign typed data using TronWeb
+const signature = await window.tronWeb.trx._signTypedData(
+    typedData.domain,
+    types,
+    message
+);
+
+// Initiate the swap with the signature.
+await fetch(`https://testnet.api.garden.finance/v2/orders/${response.result.order_id}?action=initiate`, {
+    method: 'PATCH',
+    headers: {
+        'garden-app-id': 'f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796',
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ signature })
+});
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/b0d73ffcc814f4b6476be779d588985aeb178ba6eeee27a5cf4d9d33461b4005' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2026-01-16T11:16:46.050428Z",
+        "source_swap": {
+            "created_at": "2026-01-16T11:16:46.050428Z",
+            "swap_id": "2db870aaaf5a2b65d2362da52ef564f42d88542f38e55dacdcb802d5eabef44b",
+            "chain": "tron_shasta",
+            "asset": "tron_shasta:wbtc",
+            "initiator": "TWbEz5ibiL6dreiLJ5oBF5CwDkw6Xfe6KX",
+            "redeemer": "TKmnp9reskx58cYACSzvbXDBr7hKFh7XHS",
+            "timelock": 432000,
+            "filled_amount": "50000",
+            "asset_price": 95291.0,
+            "amount": "50000",
+            "secret_hash": "9bf64d0cd7a8f0d254dcc48724e4d2969fdf8dfc25619bc622a3bcecb33e29c8",
+            "secret": "f1a5f527cdffa795cd571b833e726a67df4ecfa77f5b01cbecd6c35c1e74eca4",
+            "initiate_tx_hash": "0xc85acba4e03fb55807049ee048b96081b5686a6ceee4ea382d3cfa8f36d1a4c5",
+            "redeem_tx_hash": "0xc66c1bfb1b6b276556a5a034f67b0525bedc44184827b68dd9147fbdf666c434",
+            "refund_tx_hash": "",
+            "initiate_block_number": "61503886",
+            "redeem_block_number": "61503898",
+            "refund_block_number": "0",
+            "required_confirmations": 1,
+            "current_confirmations": 1,
+            "initiate_timestamp": "2026-01-16T11:17:36Z",
+            "redeem_timestamp": "2026-01-16T11:18:18Z",
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2026-01-16T11:16:46.050428Z",
+            "swap_id": "ce80898324c992c2112d8caafe8d2cc95c1c167ef1934bc6eed610c4b235b923",
+            "chain": "arbitrum_sepolia",
+            "asset": "arbitrum_sepolia:wbtc",
+            "initiator": "0x35ac29159116f687fa7dec74c3331a2d5bb1e89e",
+            "redeemer": "0xA39ABb978cfd2ba459163ad1EaB6E8940Fbf4359",
+            "timelock": 36000,
+            "filled_amount": "49850",
+            "asset_price": 95291.0,
+            "amount": "49850",
+            "secret_hash": "9bf64d0cd7a8f0d254dcc48724e4d2969fdf8dfc25619bc622a3bcecb33e29c8",
+            "secret": "f1a5f527cdffa795cd571b833e726a67df4ecfa77f5b01cbecd6c35c1e74eca4",
+            "initiate_tx_hash": "0xc520b684eb9376b83622fb12871a8a96b5cdf4be68914abd426d24850ccf310f",
+            "redeem_tx_hash": "0x1abd4e96badd88915547c0c67bea14de545fc78dc4e034aa37dc3ee94243bbf5",
+            "refund_tx_hash": "",
+            "initiate_block_number": "233982423",
+            "redeem_block_number": "233982458",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": "2026-01-16T11:17:59Z",
+            "redeem_timestamp": "2026-01-16T11:18:07Z",
+            "refund_timestamp": null
+        },
+        "nonce": "1768562205873",
+        "order_id": "b0d73ffcc814f4b6476be779d588985aeb178ba6eeee27a5cf4d9d33461b4005",
+        "affiliate_fees": [],
+        "integrator": "DocsTesting",
+        "version": "v3",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d"
+    }
+}
+From Solana
+
+Get Quote
+
+Let’s get a quote to trade 0.354608265 SOL on Solana Testnet to BTC on Bitcoin Testnet4.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=solana_testnet:sol&to=bitcoin_testnet:btc&from_amount=354608265' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "solana_testnet:sol",
+            "amount": "354608265",
+            "display": "0.35460826",
+            "value": "57.1238"
+        },
+        "destination": {
+            "asset": "bitcoin_testnet:btc",
+            "amount": "48515",
+            "display": "0.00048515",
+            "value": "56.9524"
+        },
+        "solver_id": "0x9dd9c2d208b07bf9a4ef9ca311f36d7185749635",
+        "estimated_time": 20,
+        "slippage": 50,
+        "fee": 30,
+        "fixed_fee": "0.0"
+        }
+    ]
+}
+
+2
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+        --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+        --header 'Content-Type: application/json' \
+        --data '{
+            "source": {
+                "asset": "solana_testnet:sol",
+                "owner": "YH4btvqb4JBWSEJh22MuA231ekpJ5JqbBXQY1apJtKH",
+                "amount": "354608265"
+            },
+            "destination": {
+                "asset": "bitcoin_testnet:btc",
+                "owner": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+                "amount": "48515"
+            }
+        }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "order_id": "ee54521431fd3b7c01f46f2aaec086362d8cf2d6a7d3b31233c66c31bed9e4eb",
+        "versioned_tx": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100020408032aa331a727d64421581d1ec2ea7cdde7ac7bb04a7ab7bb5e7f4ea5992f08b30c777cae9e6cbeb9830b8b0cd529b6e1f3667ae0c1c21071cb64bba2c7763e000000000000000000000000000000000000000000000000000000000000000017b7828ca6c4f06b51139a60254f81fe1249c8e2b122febf32ca81322b9f1e8ed3c02412b5458cdb8b14d42d4a61166f85f0f4e4d536c8a9f111a4de7e86b77801030301000258053f7b71994b940e89e4221500000000c04b03000000000044070018cffb963a80cb5bf8974e0d64934c614d26340d947ddf3b762a014cacb8841dc97c588ab9e1b94f62627b97d54f8c1048b28c26749d413032e9d66c4e",
+        "versioned_tx_gasless": null
+    }
+}
+Then deposit the funds:
+Submit transaction
+// Decode and deserialize the `versioned_tx` field
+const buffer = Buffer.from(response.result.versioned_tx, 'base64');
+const transaction = VersionedTransaction.deserialize(buffer);
+
+// Sign and send using your wallet.
+const signature = await wallet.signAndSendTransaction(transaction);
+
+Gasless submission
+Currently, this is only supported for Solana SPL orders. As such, versioned_tx_gasless will be null for Solana orders with native SOL.
+// Note the use of `versioned_tx_gasless`
+const buffer = Buffer.from(response.result.versioned_tx_gasless, 'base64');
+const transaction = VersionedTransaction.deserialize(buffer);
+
+// Sign using your wallet
+const signedTransaction = await wallet.signTransaction(transaction);
+
+// Serialize and base64 encode the signed transaction
+const encodedTx = Buffer.from(signedTransaction.serialize()).toString('base64');
+
+// Pass this encoded transaction to the garden API
+await fetch(`https://testnet.api.garden.finance/v2/orders/${response.result.order_id}?action=initiate`, {
+    method: 'PATCH',
+    headers: {
+        'garden-app-id': 'f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796',
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ signature: encodedTx })
+});
+
+
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/ee54521431fd3b7c01f46f2aaec086362d8cf2d6a7d3b31233c66c31bed9e4eb' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2025-07-13T01:35:18.538262Z",
+        "source_swap": {
+            "created_at": "2025-07-13T01:35:18.538262Z",
+            "swap_id": "4629969e622608f634a4be4116f80be482ef987bccf30ef9900eb3e0f242eb77",
+            "chain": "solana_testnet",
+            "asset": "solana_testnet:sol",
+            "initiator": "YH4btvqb4JBWSEJh22MuA231ekpJ5JqbBXQY1apJtKH",
+            "redeemer": "5aYv3mxzXupjUa6Yyi23Yn3n1kbgGEDfrJ6uBDq6VwQo",
+            "timelock": 216000,
+            "filled_amount": "0",
+            "asset_price": 161.11,
+            "amount": "354608265",
+            "secret_hash": "b8841dc97c588ab9e1b94f62627b97d54f8c1048b28c26749d413032e9d66c4e",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 1,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2025-07-13T01:35:18.538262Z",
+            "swap_id": "tb1pydwnxvdwfhs674py5z7wfst9nvm2t92s9lpfs6l7v4e0tsfxx64shepc0x",
+            "chain": "bitcoin_testnet",
+            "asset": "bitcoin_testnet:btc",
+            "initiator": "460f2e8ff81fc4e0a8e6ce7796704e3829e3e3eedb8db9390bdc51f4f04cf0a6",
+            "redeemer": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "delegate": "be7d111dca1cc2b967d1d1a20bf05c2cd5050307b072dd8bfccdf8cd52fddae7",
+            "timelock": 12,
+            "filled_amount": "0",
+            "asset_price": 161.11,
+            "amount": "48515",
+            "secret_hash": "b8841dc97c588ab9e1b94f62627b97d54f8c1048b28c26749d413032e9d66c4e",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "nonce": "18331192702570975643",
+        "order_id": "ee54521431fd3b7c01f46f2aaec086362d8cf2d6a7d3b31233c66c31bed9e4eb",
+        "affiliate_fees": [],
+        "integrator": "DocsTesting",
+        "version": "v1",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d"
+    }
+}
+Get Quote
+
+
+From Starknet
+Get Quote
+
+Let’s get a quote to trade 0.0005 WBTC on Starknet Sepolia to BTC on Bitcoin Testnet4.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=starknet_sepolia:wbtc&to=bitcoin_testnet:btc&from_amount=50000' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "starknet_sepolia:wbtc",
+            "amount": "50000",
+            "display": "0.00050000",
+            "value": "58.8800"
+        },
+        "destination": {
+            "asset": "bitcoin_testnet:btc",
+            "amount": "49850",
+            "display": "0.00049850",
+            "value": "58.7033"
+        },
+        "solver_id": "0x9dd9c2d208b07bf9a4ef9ca311f36d7185749635",
+        "estimated_time": 20,
+        "slippage": 50,
+        "fee": 30,
+        "fixed_fee": "0.0"
+        }
+    ]
+}
+
+2
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+        --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+        --header 'Content-Type: application/json' \
+        --data '{
+            "source": {
+                "asset": "starknet_sepolia:wbtc",
+                "owner": "0x00609190b1348bcc06da44d58c79709495c11a5a6f0b9e154e1209f2a17dd933",
+                "amount": "50000"
+            },
+            "destination": {
+                "asset": "bitcoin_testnet:btc",
+                "owner": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+                "amount": "49850"
+            }
+        }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "approval_transaction": {
+            "calldata": [
+                "0x6579d255314109429a4477d89629bc2b94f529ae01979c2f8014f9246482603",
+                "0xffffffffffffffffffffffffffffffff",
+                "0xffffffffffffffffffffffffffffffff"
+            ],
+            "selector": "0x219209e083275171774dab1df80982e9df2096516f06319c5c6d71ae0a8480c",
+            "to": "0x496bef3ed20371382fbe0ca6a5a64252c5c848f9f1f0cccf8110fc4def912d5"
+        },
+        "initiate_transaction": {
+            "calldata": [
+                "0x78f8ae98fe78b5df9d3755b5910864c028d5249b4af685eb45687b1b76a4205",
+                "0xb40",
+                "0xc350",
+                "0x0",
+                "0x5e0dfe4c",
+                "0x3c6495a",
+                "0x5f81f922",
+                "0x204d8c16",
+                "0x964f6ca5",
+                "0xcc766f3a",
+                "0x6a4cc6cd",
+                "0x2117fdb4"
+            ],
+            "selector": "0x2aed25fcd0101fcece997d93f9d0643dfa3fbd4118cae16bf7d6cd533577c28",
+            "to": "0x6579d255314109429a4477d89629bc2b94f529ae01979c2f8014f9246482603"
+        },
+        "order_id": "f64db51ba3894ba3720925aaa816d4eb538f623802686595bf8ac50ecbc68bad",
+        "typed_data": {
+            "domain": {
+                "chainId": "0x534e5f5345504f4c4941",
+                "name": "HTLC",
+                "revision": 1,
+                "version": "0x31"
+            },
+            "message": {
+                "amount": {
+                "high": "0x0",
+                "low": "0xc350"
+                },
+                "redeemer": "3419807808164513772718725483164424774502669183354591566218616648407888577029",
+                "secretHash": [
+                1577975372,
+                63326554,
+                1602353442,
+                541953046,
+                2521787557,
+                3430313786,
+                1783416525,
+                555220404
+                ],
+                "timelock": "2880"
+            },
+            "primaryType": "Initiate",
+            "types": {
+                "Initiate": [
+                    {
+                        "name": "redeemer",
+                        "type": "ContractAddress"
+                    },
+                    {
+                        "name": "amount",
+                        "type": "u256"
+                    },
+                    {
+                        "name": "timelock",
+                        "type": "u128"
+                    },
+                    {
+                        "name": "secretHash",
+                        "type": "u128*"
+                    }
+                ],
+                "StarknetDomain": [
+                    {
+                        "name": "name",
+                        "type": "shortstring"
+                    },
+                    {
+                        "name": "version",
+                        "type": "shortstring"
+                    },
+                    {
+                        "name": "chainId",
+                        "type": "shortstring"
+                    },
+                    {
+                        "name": "revision",
+                        "type": "shortstring"
+                    }
+                ]
+            }
+        }
+    }
+}
+Then deposit the funds:
+
+Submit transaction
+await account.execute([{
+    contractAddress: response.result.transaction.to,
+    entrypoint: response.result.transaction.selector,
+    calldata: response.result.transaction.calldata
+}]);
+
+Gasless submission
+// Sign typed data.
+const signature = await account.signMessage(response.result.typed_data);
+
+// Initiate the swap with the signature.
+await fetch(`https://testnet.api.garden.finance/v2/orders/${response.result.order_id}?action=initiate`, {
+    method: 'PATCH',
+    headers: {
+        'garden-app-id': 'f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796',
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ signature })
+});
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/f64db51ba3894ba3720925aaa816d4eb538f623802686595bf8ac50ecbc68bad' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2025-09-01T07:02:07.851646Z",
+        "source_swap": {
+            "created_at": "2025-09-01T07:02:07.851646Z",
+            "swap_id": "3ef65007bb6cabe9749309ecfb4e343bc31c3f1e66865dd49623c557c275dcb",
+            "chain": "starknet_sepolia",
+            "asset": "starknet_sepolia:wbtc",
+            "initiator": "0x00609190b1348bcc06da44d58c79709495c11a5a6f0b9e154e1209f2a17dd933",
+            "redeemer": "0x078f8ae98fe78b5df9d3755b5910864c028d5249b4af685eb45687b1b76a4205",
+            "timelock": 2880,
+            "filled_amount": "0",
+            "asset_price": 108201,
+            "amount": "50000",
+            "secret_hash": "5e0dfe4c03c6495a5f81f922204d8c16964f6ca5cc766f3a6a4cc6cd2117fdb4",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 1,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2025-09-01T07:02:07.851646Z",
+            "swap_id": "tb1p3nug6w3cjtnvjuu43aytqtnx5420q6nmntzsrdkngk4na7ny4x7qfayy5n",
+            "chain": "bitcoin_testnet",
+            "asset": "bitcoin_testnet:btc",
+            "initiator": "460f2e8ff81fc4e0a8e6ce7796704e3829e3e3eedb8db9390bdc51f4f04cf0a6",
+            "redeemer": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "delegate": "e6ca4c227c7e048c5d605bfe478e79ee313de490cdfbb11160c2cc1221dbdc71",
+            "timelock": 12,
+            "filled_amount": "0",
+            "asset_price": 108201,
+            "amount": "49850",
+            "secret_hash": "5e0dfe4c03c6495a5f81f922204d8c16964f6ca5cc766f3a6a4cc6cd2117fdb4",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "nonce": "5463708687999347822",
+        "order_id": "f64db51ba3894ba3720925aaa816d4eb538f623802686595bf8ac50ecbc68bad",
+        "affiliate_fees": [],
+        "integrator": "DocsTesting",
+        "version": "v2",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d"
+    }
+}
+
+From Sui
+
+Get Quote
+
+Let’s get a quote to trade 3 Sui on Sui Testnet to BTC on Bitcoin Testnet4.
+curl -X 'GET' 'https://testnet.api.garden.finance/v2/quote?from=sui_testnet:sui&to=bitcoin_testnet:btc&from_amount=3000000000' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": [
+        {
+        "source": {
+            "asset": "sui_testnet:sui",
+            "amount": "3000000000",
+            "display": "3.00000000",
+            "value": "9.9997"
+        },
+        "destination": {
+            "asset": "bitcoin_testnet:btc",
+            "amount": "9079",
+            "display": "0.00009079",
+            "value": "9.9697"
+        },
+        "solver_id": "0x9dd9c2d208b07bf9a4ef9ca311f36d7185749635",
+        "estimated_time": 20,
+        "slippage": 50,
+        "fee": 30,
+        "fixed_fee": "0.0"
+        }
+    ]
+}
+
+2
+Submit Order
+
+Once a quote is received, we can submit the order:
+Use amount and asset from the quote response. Use your wallet addresses for owner.
+curl --location 'https://testnet.api.garden.finance/v2/orders' \
+    --header 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "source": {
+            "asset": "sui_testnet:sui",
+            "owner": "0x79a1582388c16d0ab85904f320eb0527481391a9b9ab4b2ab46adc4c2564f9d0",
+            "amount": "3000000000"
+        },
+        "destination": {
+            "asset": "bitcoin_testnet:btc",
+            "owner": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "amount": "9079"
+        }
+    }'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "order_id": "e7a2d8b8dbf8d1e315c17e40cd9287410ea9449258f806a1833b7f9ad68527f5",
+        "ptb_bytes": [0,8,0,8,0,94,208,178,0,0,0,0,1,1,92,67,135,21,183,220,192,45,18,171,146,68,145,83,161,229,173,226,48,22,32,213,191,96,170,116,143,0,103,38,211,105,76,48,204,31,0,0,0,0,1,0,32,121,161,88,35,136,193,109,10,184,89,4,243,32,235,5,39,72,19,145,169,185,171,75,42,180,106,220,76,37,100,249,208,0,32,63,109,158,7,253,76,218,187,170,112,151,193,158,207,101,88,9,200,147,169,207,227,244,24,195,255,188,4,37,13,59,76,0,33,32,57,81,42,177,166,145,123,61,75,78,219,100,208,167,124,32,76,159,215,52,146,144,167,63,206,85,74,183,15,149,211,219,0,32,0,92,38,5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,6,1,0,0,0,0,0,0,0,0,2,2,0,1,1,0,0,0,153,134,91,3,221,27,192,61,10,106,128,92,69,78,162,87,196,100,247,171,204,202,233,205,75,98,27,145,231,202,4,222,10,65,116,111,109,105,99,83,119,97,112,8,105,110,105,116,105,97,116,101,1,7,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,3,115,117,105,3,83,85,73,0,9,1,1,0,1,2,0,1,3,0,1,4,0,1,0,0,1,5,0,1,6,0,2,0,0,1,7,0]
+    }
+}
+
+Then deposit the funds:
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { Transaction } from "@mysten/sui/transactions";
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+
+const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+const gasPrice = await client.getReferenceGasPrice();
+const estimatedGasBudget = 10000000; // 10M gas units as a conservative estimate
+
+let transaction = Transaction.fromKind(new Uint8Array(ptb_bytes)) // ptb_bytes are the Programmable Transaction Bytes returned from the create order response
+transaction.setSender(sender);
+transaction.setGasPrice(gasPrice);
+transaction.setGasBudget(estimatedGasBudget);
+
+const suiWallet = Ed25519Keypair.fromSecretKey("[private-key]");
+
+try {
+    const result = await client.signAndExecuteTransaction({
+        transaction: transaction,
+        signer: suiWallet,
+        options: {
+            showEffects: true,
+        },
+    });
+} catch (error) {
+    console.error('Transaction execution failed:', error);
+}
+3
+Check Order Status
+
+Check the order status using the order_id from the response.
+curl -X 'GET' \
+'https://testnet.api.garden.finance/v2/orders/e7a2d8b8dbf8d1e315c17e40cd9287410ea9449258f806a1833b7f9ad68527f5' \
+-H 'garden-app-id: f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796' \
+-H 'accept: application/json'
+Response
+{
+    "status": "Ok",
+    "result": {
+        "created_at": "2025-09-01T09:33:10.050305Z",
+        "source_swap": {
+            "created_at": "2025-09-01T09:33:10.050305Z",
+            "swap_id": "1220ade677e925f325fbcef8ded85efd4d416852015678634dd471bfd77e8f2f",
+            "chain": "sui_testnet",
+            "asset": "sui_testnet:sui",
+            "initiator": "0x79a1582388c16d0ab85904f320eb0527481391a9b9ab4b2ab46adc4c2564f9d0",
+            "redeemer": "0x3f6d9e07fd4cdabbaa7097c19ecf655809c893a9cfe3f418c3ffbc04250d3b4c",
+            "timelock": 86400000,
+            "filled_amount": "0",
+            "asset_price": 3.3332479255988647,
+            "amount": "3000000000",
+            "secret_hash": "39512ab1a6917b3d4b4edb64d0a77c204c9fd7349290a73fce554ab70f95d3db",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "destination_swap": {
+            "created_at": "2025-09-01T09:33:10.050305Z",
+            "swap_id": "tb1p77xn22avz3qyu9tkm00q4rfuyz5c2960y33vde7z58xwh0zymv3sk879l4",
+            "chain": "bitcoin_testnet",
+            "asset": "bitcoin_testnet:btc",
+            "initiator": "460f2e8ff81fc4e0a8e6ce7796704e3829e3e3eedb8db9390bdc51f4f04cf0a6",
+            "redeemer": "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd",
+            "delegate": "f5a577508b4b55e65d693f7c772eab767b2e22626e8a76b654b6142abc3ffd5e",
+            "timelock": 12,
+            "filled_amount": "0",
+            "asset_price": 109799.0308368164,
+            "amount": "9079",
+            "secret_hash": "39512ab1a6917b3d4b4edb64d0a77c204c9fd7349290a73fce554ab70f95d3db",
+            "secret": "",
+            "initiate_tx_hash": "",
+            "redeem_tx_hash": "",
+            "refund_tx_hash": "",
+            "initiate_block_number": "0",
+            "redeem_block_number": "0",
+            "refund_block_number": "0",
+            "required_confirmations": 0,
+            "current_confirmations": 0,
+            "initiate_timestamp": null,
+            "redeem_timestamp": null,
+            "refund_timestamp": null
+        },
+        "nonce": "9973478672661146798",
+        "order_id": "e7a2d8b8dbf8d1e315c17e40cd9287410ea9449258f806a1833b7f9ad68527f5",
+        "affiliate_fees": [],
+        "integrator": "DocsTesting",
+        "version": "v2",
+        "solver_id": "0x90eb912279ee8a3c56f784a44dedffae4487524d"
+    }
+}
