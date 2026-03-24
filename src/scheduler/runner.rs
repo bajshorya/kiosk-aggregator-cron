@@ -1,8 +1,9 @@
 use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use chrono::Utc;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -23,20 +24,82 @@ impl SwapRunner {
         Self { api, db, config }
     }
 
+    /// Test a single swap pair by asset names
+    pub async fn test_single_swap(&self, from_asset: &str, to_asset: &str) -> Result<SwapRecord, anyhow::Error> {
+        use crate::chains::all_swap_pairs;
+        
+        let pairs = all_swap_pairs(&self.config.wallets);
+        let pair = pairs
+            .iter()
+            .find(|p| p.source.asset == from_asset && p.destination.asset == to_asset)
+            .ok_or_else(|| anyhow::anyhow!(
+                "Swap pair not found: {} -> {}\nUse 'list-swaps' to see available pairs",
+                from_asset,
+                to_asset
+            ))?;
+
+        let run_id = uuid::Uuid::new_v4().to_string();
+        info!("Testing single swap: {}", pair.label());
+        
+        let record = self.run_single_swap(&run_id, pair).await;
+        
+        // Save to database
+        let summary = crate::models::RunSummary {
+            run_id: run_id.clone(),
+            total_swaps: 1,
+            completed: if record.status == SwapStatus::Completed { 1 } else { 0 },
+            failed: if record.status == SwapStatus::Failed { 1 } else { 0 },
+            timed_out: if record.status == SwapStatus::TimedOut { 1 } else { 0 },
+            pending: if record.status == SwapStatus::Pending { 1 } else { 0 },
+            started_at: record.started_at,
+            results: vec![record.clone()],
+        };
+        
+        let _ = self.db.insert_run_summary(&summary);
+        
+        Ok(record)
+    }
+
+    /// Run all swap pairs CONCURRENTLY - all swaps start at once
     pub async fn run_all(&self) -> RunSummary {
         let run_id = Uuid::new_v4().to_string();
         let started_at = Utc::now();
         let pairs = all_swap_pairs(&self.config.wallets);
         let total = pairs.len();
 
-        info!(run_id = %run_id, "=== Starting swap test run ({} pairs) ===", total);
+        info!(run_id = %run_id, "=== Starting CONCURRENT swap test run ({} pairs) ===", total);
+        info!("All swaps will start simultaneously!");
 
+        // Spawn all swaps as concurrent tasks
+        let mut set: JoinSet<SwapRecord> = JoinSet::new();
+        
+        for pair in pairs {
+            let api = Arc::clone(&self.api);
+            let db = Arc::clone(&self.db);
+            let config = self.config.clone();
+            let run_id_c = run_id.clone();
+            
+            set.spawn(async move {
+                let runner = SwapRunner { api, db, config };
+                runner.run_single_swap(&run_id_c, &pair).await
+            });
+        }
+
+        // Collect results as tasks complete
         let mut records: Vec<SwapRecord> = Vec::with_capacity(total);
-
-        for pair in &pairs {
-            let record = self.run_single_swap(&run_id, pair).await;
-            records.push(record);
-            thread::sleep(Duration::from_millis(500));
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok(record) => {
+                    info!(
+                        pair = %record.swap_pair,
+                        status = %record.status,
+                        duration = ?record.duration_secs,
+                        "✅ Task finished"
+                    );
+                    records.push(record);
+                }
+                Err(e) => error!("Swap task panicked: {}", e),
+            }
         }
 
         let completed = records
@@ -174,19 +237,27 @@ impl SwapRunner {
             error!("Failed to update record to Pending: {}", e);
         }
 
-        // ── Step 3: Poll for completion ────────────────────────────────────
+        // ── Step 3: Poll for completion with DB updates on each poll ──────
         let timeout = self.config.swap_timeout();
         let poll_every = self.config.poll_interval();
         let deadline = Instant::now() + timeout;
+        let mut poll_count: u32 = 0;
 
         loop {
-            thread::sleep(poll_every);
+            sleep(poll_every).await;
+            poll_count += 1;
 
             if Instant::now() >= deadline {
-                warn!(pair = %pair.label(), order_id = %order_id, "Swap timed out");
+                warn!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    polls = poll_count,
+                    "⏰ Swap timed out after {}s",
+                    timeout.as_secs()
+                );
                 let now = Utc::now();
                 record.status = SwapStatus::TimedOut;
-                record.error_message = Some(format!("Timed out after {}s", timeout.as_secs()));
+                record.error_message = Some(format!("Timed out after {}s ({} polls)", timeout.as_secs(), poll_count));
                 record.completed_at = Some(now);
                 record.duration_secs = Some((now - record.started_at).num_seconds());
                 let _ = self.db.update_swap_record(&record);
@@ -196,7 +267,7 @@ impl SwapRunner {
             let status_resp = match self.api.get_order_status(&order_id).await {
                 Ok(r) => r,
                 Err(e) => {
-                    warn!(pair = %pair.label(), "Poll error: {}. Retrying...", e);
+                    warn!(pair = %pair.label(), "Poll #{} error: {}. Retrying...", poll_count, e);
                     continue;
                 }
             };
@@ -206,33 +277,61 @@ impl SwapRunner {
 
             info!(
                 pair = %pair.label(),
-                src_init = %src.initiate_tx_hash.as_deref().unwrap_or(""),
-                dst_redeem = %dst.redeem_tx_hash.as_deref().unwrap_or(""),
+                poll = poll_count,
+                src_init = %src.initiate_tx_hash.as_deref().unwrap_or("—"),
+                src_redeem = %src.redeem_tx_hash.as_deref().unwrap_or("—"),
+                dst_init = %dst.initiate_tx_hash.as_deref().unwrap_or("—"),
+                dst_redeem = %dst.redeem_tx_hash.as_deref().unwrap_or("—"),
                 "Poll"
             );
 
+            // Update TX hashes
+            let prev_src_init = record.source_initiate_tx.clone();
             record.source_initiate_tx = src.initiate_tx_hash.clone();
             record.source_redeem_tx = src.redeem_tx_hash.clone();
             record.dest_initiate_tx = dst.initiate_tx_hash.clone();
             record.dest_redeem_tx = dst.redeem_tx_hash.clone();
 
+            // Update DB on every poll when TX hashes change
+            if record.source_initiate_tx != prev_src_init
+                || record.dest_initiate_tx.is_some()
+                || record.dest_redeem_tx.is_some()
+            {
+                if let Err(e) = self.db.update_swap_record(&record) {
+                    warn!(pair = %pair.label(), "Failed to persist poll state: {}", e);
+                }
+            }
+
+            // Terminal state: destination redeemed = success
             if dst.is_redeemed() {
                 let now = Utc::now();
                 record.status = SwapStatus::Completed;
                 record.completed_at = Some(now);
                 record.duration_secs = Some((now - record.started_at).num_seconds());
-                info!(pair = %pair.label(), order_id = %order_id, "[OK] Swap completed");
+                info!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    polls = poll_count,
+                    duration_secs = record.duration_secs.unwrap_or(0),
+                    "✅ Swap completed"
+                );
                 let _ = self.db.update_swap_record(&record);
                 return record;
             }
 
+            // Terminal state: source refunded = failed swap
             if src.is_refunded() {
                 let now = Utc::now();
                 record.status = SwapStatus::Refunded;
                 record.error_message = Some("Source swap was refunded".to_string());
                 record.completed_at = Some(now);
                 record.duration_secs = Some((now - record.started_at).num_seconds());
-                warn!(pair = %pair.label(), order_id = %order_id, "[REFUND] Swap refunded");
+                warn!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    polls = poll_count,
+                    "↩️  Swap refunded"
+                );
                 let _ = self.db.update_swap_record(&record);
                 return record;
             }
@@ -240,13 +339,16 @@ impl SwapRunner {
     }
 
     fn fail(&self, mut record: SwapRecord, message: String) -> SwapRecord {
-        error!(pair = %record.swap_pair, "{}", message);
+        error!(pair = %record.swap_pair, "❌ {}", message);
         let now = Utc::now();
         record.status = SwapStatus::Failed;
         record.error_message = Some(message);
         record.completed_at = Some(now);
         record.duration_secs = Some((now - record.started_at).num_seconds());
-        let _ = self.db.update_swap_record(&record);
+        // Only update if we have an ID (initial insert succeeded)
+        if record.id.is_some() {
+            let _ = self.db.update_swap_record(&record);
+        }
         record
     }
 }

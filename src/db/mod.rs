@@ -10,10 +10,20 @@ pub struct Database {
     conn: Mutex<Connection>,
 }
 
+// rusqlite::Connection is Send, so Database can be safely shared across threads
+unsafe impl Send for Database {}
+unsafe impl Sync for Database {}
+
 impl Database {
     pub fn connect(path: &str) -> Result<Self> {
         info!("Opening database: {}", path);
         let conn = Connection::open(path).context("Failed to open SQLite database")?;
+        
+        // Enable WAL mode for better concurrent access
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;"
+        ).context("Failed to set WAL mode")?;
+        
         let db = Self {
             conn: Mutex::new(conn),
         };
@@ -99,6 +109,12 @@ impl Database {
     }
 
     pub fn update_swap_record(&self, record: &SwapRecord) -> Result<()> {
+        // Guard against None id
+        let id = match record.id {
+            Some(id) => id,
+            None => anyhow::bail!("Cannot update a record without an id"),
+        };
+        
         let conn = self.conn.lock().unwrap();
         conn.execute(
             r#"UPDATE swap_records SET
@@ -118,7 +134,7 @@ impl Database {
                 record.dest_redeem_tx,
                 record.completed_at.map(|t: DateTime<Utc>| t.to_rfc3339()),
                 record.duration_secs,
-                record.id,
+                id,
             ],
         )
         .context("Update swap record failed")?;

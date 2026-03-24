@@ -1,6 +1,4 @@
-mod order;
-mod quote;
-mod swap_result;
+// All types consolidated in this file to avoid duplicate definitions
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

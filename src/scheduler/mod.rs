@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tracing::{error, info};
+use tracing::info;
 
 use crate::api::GardenApiClient;
 use crate::config::AppConfig;
