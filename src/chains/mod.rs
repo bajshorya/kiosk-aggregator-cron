@@ -1,5 +1,8 @@
 pub mod evm_signer;
 pub mod solana_signer;
+pub mod starknet_signer;
+pub mod tron_signer;
+pub mod sui_signer;
 
 use crate::config::WalletConfig;
 #[derive(Debug, Clone)]
@@ -148,6 +151,22 @@ pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
             sol,
             "ethereum_sepolia:wbtc",
             evm
+        ),
+        pair!(
+            "solana_testnet:sol",
+            "100000000",
+            sol,
+            "ethereum_sepolia:eth",
+            evm
+        ),
+        // ═══ ETH to Solana (test reverse flow) ═══
+        // ETH minimum: 0.005 ETH = 5000000000000000 wei (~$5 at $1000 ETH)
+        pair!(
+            "ethereum_sepolia:eth",
+            "5000000000000000",
+            evm,
+            "solana_testnet:sol",
+            sol
         ),
         pair!(
             "solana_testnet:sol",

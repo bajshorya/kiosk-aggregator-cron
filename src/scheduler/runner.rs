@@ -411,31 +411,58 @@ impl SwapRunner {
                 || c.starts_with("base_")
                 || c.starts_with("arbitrum_") =>
             {
-                let _guard = self.evm_lock.lock(); // ← serializes all EVM txs
-                let rpc_url = self.rpc_url_for_chain(c)?;
-                let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone());
+                // Check if gasless is available (typed_data present)
+                if let Some(typed_data) = &order_result.typed_data {
+                    // Use EIP-712 gasless flow
+                    info!("Using EIP-712 gasless initiation for {}", source_asset);
+                    let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
+                    
+                    // Check if approval transaction is needed (for ERC20 tokens)
+                    if let Some(approval_tx) = &order_result.approval_transaction {
+                        info!("Approval transaction required for ERC20 token");
+                        let rpc_url = self.rpc_url_for_chain(chain)?;
+                        
+                        info!("Executing approval transaction via RPC");
+                        let approval_hash = signer.send_transaction(approval_tx, &rpc_url).await?;
+                        info!("Approval transaction sent: {}", approval_hash);
+                        
+                        // Wait a bit for approval to be mined
+                        info!("Waiting 10s for approval transaction to be mined...");
+                        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                    }
+                    
+                    // Now sign typed data for gasless initiation
+                    let signature = signer.sign_typed_data(typed_data).await?;
 
-                if let Some(approval_tx) = order_result.approval_transaction.as_ref() {
-                    info!("Sending approval tx for {}", source_asset);
-                    let approval_hash = signer
-                        .execute_initiate_tx(approval_tx, &rpc_url)
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Approval tx failed: {}", e))?;
-                    info!("Approval tx sent: {}", approval_hash);
-                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    let order_id = &order_result.order_id;
+                    info!("Submitting EIP-712 signature for order {}", order_id);
+                    
+                    self.api
+                        .initiate_swap_gasless_evm(order_id, &signature)
+                        .await?;
+
+                    info!("EVM gasless initiation submitted successfully");
+                    Ok(format!("gasless-evm-{}", order_id))
+                } else if let Some(tx_data) = &order_result.initiate_transaction {
+                    // Fallback to traditional transaction broadcasting
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not enabled. Using traditional transaction broadcasting."
+                    );
+                    
+                    let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
+                    let rpc_url = self.rpc_url_for_chain(chain)?;
+                    
+                    info!("Broadcasting EVM transaction via RPC");
+                    let tx_hash = signer.send_transaction(tx_data, &rpc_url).await?;
+                    
+                    info!("EVM transaction broadcasted: {}", tx_hash);
+                    Ok(tx_hash)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No typed_data or initiate_transaction in EVM order response"
+                    ))
                 }
-
-                let tx_data = order_result
-                    .initiate_transaction
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("No initiate_transaction in response"))?;
-
-                let hash = signer
-                    .execute_initiate_tx(tx_data, &rpc_url)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Initiate tx failed: {}", e))?;
-
-                Ok(hash)
             }
             c if c.starts_with("tron_") => Err(anyhow::anyhow!("Tron signing not yet implemented")),
 
@@ -466,45 +493,69 @@ impl SwapRunner {
                 let signer = SolanaSigner::new(private_key)
                     .context("Failed to create Solana signer")?;
 
-                // Get versioned_tx from the order response
-                let versioned_tx = order_result
-                    .versioned_tx
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("No versioned_tx in Solana response"))?;
+                // Check if gasless is available (versioned_tx_gasless present)
+                if let Some(versioned_tx_gasless) = &order_result.versioned_tx_gasless {
+                    info!(
+                        asset = %source_asset,
+                        "Using versioned_tx_gasless ({} chars) - GASLESS MODE",
+                        versioned_tx_gasless.len()
+                    );
 
-                info!(
-                    asset = %source_asset,
-                    "Using versioned_tx ({} chars)",
-                    versioned_tx.len()
-                );
+                    // Sign the gasless transaction
+                    info!(asset = %source_asset, "Signing Solana gasless transaction...");
+                    let signed_tx_base64 = signer
+                        .sign_transaction(versioned_tx_gasless)
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Solana signing failed");
+                            anyhow::anyhow!("Failed to sign Solana transaction: {}", e)
+                        })?;
 
-                // Sign the transaction
-                info!(asset = %source_asset, "Signing Solana transaction...");
-                let signed_tx_base64 = signer
-                    .sign_transaction(versioned_tx)
-                    .map_err(|e| {
-                        error!(asset = %source_asset, error = %e, "Solana signing failed");
-                        anyhow::anyhow!("Failed to sign Solana transaction: {}", e)
-                    })?;
+                    info!(asset = %source_asset, "Signed transaction length: {} chars", signed_tx_base64.len());
 
-                // Submit via gasless PATCH endpoint
-                let order_id = &order_result.order_id;
-                // Try without order_id in body since it's in the URL
-                let payload = serde_json::json!({
-                    "serialized_tx": signed_tx_base64
-                });
+                    // Submit via gasless /initiate endpoint (not PATCH)
+                    let order_id = &order_result.order_id;
+                    info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless /initiate endpoint...");
+                    
+                    let tx_hash = self.api
+                        .initiate_swap_gasless_solana(order_id, &signed_tx_base64)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Gasless initiation failed");
+                            anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
+                        })?;
 
-                info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless endpoint...");
-                self.api
-                    .initiate_swap_gasless(order_id, payload)
-                    .await
-                    .map_err(|e| {
-                        error!(asset = %source_asset, error = %e, "Gasless initiation failed");
-                        anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
-                    })?;
+                    info!(asset = %source_asset, order_id = %order_id, tx_hash = %tx_hash, "Gasless initiation submitted successfully");
+                    Ok(tx_hash)
+                } else if let Some(versioned_tx) = &order_result.versioned_tx {
+                    // Non-gasless: broadcast directly to Solana RPC
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not enabled (versioned_tx_gasless=null). Broadcasting to Solana RPC directly."
+                    );
+                    
+                    info!(
+                        asset = %source_asset,
+                        "Using versioned_tx ({} chars) - NON-GASLESS MODE",
+                        versioned_tx.len()
+                    );
 
-                info!(asset = %source_asset, order_id = %order_id, "Gasless initiation submitted successfully");
-                Ok(format!("gasless-{}", order_id))
+                    let rpc_url = self.config.rpc_urls.solana_testnet.clone();
+                    info!(asset = %source_asset, "Broadcasting to Solana RPC: {}", rpc_url);
+                    
+                    // Use sign_and_send to broadcast directly
+                    let tx_hash = signer
+                        .sign_and_send(versioned_tx, &rpc_url)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Solana broadcast failed");
+                            anyhow::anyhow!("Failed to broadcast Solana transaction: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, "Solana transaction broadcasted: {}", tx_hash);
+                    Ok(tx_hash)
+                } else {
+                    Err(anyhow::anyhow!("No versioned_tx or versioned_tx_gasless in Solana response"))
+                }
             }
 
             c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => order_result

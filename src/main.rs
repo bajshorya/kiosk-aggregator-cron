@@ -44,7 +44,8 @@ async fn main() -> Result<()> {
     let mode = args.get(1).map(|s| s.as_str()).unwrap_or("scheduler");
 
     // Set up shared resources
-    let api = Arc::new(GardenApiClient::new(config.garden.clone())?);
+    let api = GardenApiClient::new(config.garden.clone())?;
+    let api = Arc::new(api);
     let db = Arc::new(Database::connect(&config.database_url)?);
 
     match mode {

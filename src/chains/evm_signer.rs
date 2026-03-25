@@ -1,68 +1,103 @@
 use anyhow::{Context, Result};
 use ethers::prelude::*;
-use ethers::signers::LocalWallet;
+use ethers::signers::{LocalWallet, Signer};
+use ethers::types::transaction::eip712::TypedData;
 use serde_json::Value;
-use std::str::FromStr;
 use tracing::info;
 
 pub struct EvmSigner {
-    private_key: String,
+    wallet: LocalWallet,
 }
 
 impl EvmSigner {
-    pub fn new(private_key: String) -> Self {
-        Self { private_key }
+    pub fn new(private_key: String) -> Result<Self> {
+        let wallet = private_key
+            .parse::<LocalWallet>()
+            .context("Failed to parse EVM private key")?;
+        Ok(Self { wallet })
     }
-    pub async fn execute_initiate_tx(&self, tx_data: &Value, rpc_url: &str) -> Result<String> {
-        let provider = Provider::<Http>::try_from(rpc_url).context("Failed to create provider")?;
 
+    /// Sign EIP-712 typed_data and return hex signature for gasless initiation
+    pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<String> {
+        info!("Signing EIP-712 typed_data for gasless initiation");
+        
+        // Parse the typed_data JSON into ethers TypedData struct
+        let typed: TypedData = serde_json::from_value(typed_data.clone())
+            .context("Failed to parse typed_data as EIP-712")?;
+
+        // Sign the typed data
+        let signature = self
+            .wallet
+            .sign_typed_data(&typed)
+            .await
+            .context("Failed to sign EIP-712 typed_data")?;
+
+        // Format as hex string with 0x prefix
+        let sig_hex = format!("0x{}", signature);
+        info!("EIP-712 signature generated: {}", sig_hex);
+        
+        Ok(sig_hex)
+    }
+
+    /// Send a raw transaction to the network (non-gasless fallback)
+    pub async fn send_transaction(
+        &self,
+        tx_data: &Value,
+        rpc_url: &str,
+    ) -> Result<String> {
+        info!("Sending EVM transaction via RPC (non-gasless)");
+        
+        // Parse transaction data
+        let to: Address = tx_data["to"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'to' field"))?
+            .parse()
+            .context("Invalid 'to' address")?;
+        
+        let data: Bytes = tx_data["data"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'data' field"))?
+            .parse()
+            .context("Invalid 'data' hex")?;
+        
+        let value: U256 = tx_data["value"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'value' field"))?
+            .parse()
+            .context("Invalid 'value' hex")?;
+        
+        let gas_limit: U256 = tx_data["gas_limit"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'gas_limit' field"))?
+            .parse()
+            .context("Invalid 'gas_limit' hex")?;
+        
         let chain_id: u64 = tx_data["chain_id"]
             .as_u64()
-            .context("Missing chain_id in tx data")?;
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid 'chain_id'"))?;
 
-        let wallet = self
-            .private_key
-            .parse::<LocalWallet>()
-            .context("Failed to parse private key")?
-            .with_chain_id(chain_id);
+        // Connect to RPC
+        let provider = Provider::<Http>::try_from(rpc_url)
+            .context("Failed to connect to RPC")?;
+        let client = SignerMiddleware::new(provider, self.wallet.clone().with_chain_id(chain_id));
 
-        let client = SignerMiddleware::new(provider, wallet);
-
-        let to = tx_data["to"]
-            .as_str()
-            .context("Missing 'to' field")?
-            .parse::<Address>()
-            .context("Invalid 'to' address")?;
-
-        let data_hex = tx_data["data"].as_str().context("Missing 'data' field")?;
-        let data = ethers::utils::hex::decode(data_hex.trim_start_matches("0x"))
-            .context("Failed to decode tx data hex")?;
-
-        let gas_limit_str = tx_data["gas_limit"].as_str().context("Missing gas_limit")?;
-        let gas_limit = U256::from_str(gas_limit_str).context("Failed to parse gas_limit")?;
-
-        let value_str = tx_data["value"].as_str().unwrap_or("0x0");
-        let value = U256::from_str(value_str).unwrap_or(U256::zero());
-
-        // Use EIP-1559 tx with provider-estimated fees instead of hardcoded gas price
-        let tx = Eip1559TransactionRequest::new()
+        // Build transaction
+        let tx = TransactionRequest::new()
             .to(to)
             .data(data)
-            .gas(gas_limit)
-            .value(value);
+            .value(value)
+            .gas(gas_limit);
 
-        info!(
-            "Broadcasting EVM tx to chain_id={} via {}",
-            chain_id, rpc_url
-        );
-
+        info!("Broadcasting transaction to chain_id={}", chain_id);
+        
+        // Send transaction
         let pending_tx = client
             .send_transaction(tx, None)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to send transaction: {}", e))?;
+            .context("Failed to send transaction")?;
 
         let tx_hash = format!("{:?}", pending_tx.tx_hash());
-        info!("EVM tx submitted: {}", tx_hash);
+        info!("Transaction sent: {}", tx_hash);
 
         Ok(tx_hash)
     }
