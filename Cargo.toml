@@ -19,5 +19,8 @@ dotenv = "0.15"
 rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
 async-trait = "0.1"
 ethers = { version = "2", features = ["rustls"] }
-
- 
+solana-sdk = "2.0"
+solana-client = "2.0"
+bs58 = "0.5"
+base64 = "0.22"
+bincode = "1.3"

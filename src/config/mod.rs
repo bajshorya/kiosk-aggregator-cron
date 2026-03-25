@@ -12,6 +12,7 @@ pub struct RpcUrlsConfig {
     pub ethereum_sepolia: String,
     pub base_sepolia: String,
     pub arbitrum_sepolia: String,
+    pub solana_testnet: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WalletConfig {
@@ -21,6 +22,7 @@ pub struct WalletConfig {
     pub evm_private_key: String,
     pub starknet_address: String,
     pub solana_address: String,
+    pub solana_private_key: Option<String>,
     pub tron_address: String,
     pub sui_address: String,
 }
@@ -44,6 +46,14 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn from_env() -> Result<Self> {
         dotenv::dotenv().ok();
+        
+        // Debug: Check if SOLANA_PRIVATE_KEY is in environment
+        let solana_key = std::env::var("SOLANA_PRIVATE_KEY").ok();
+        eprintln!("DEBUG: SOLANA_PRIVATE_KEY loaded: is_some={}, len={}", 
+            solana_key.is_some(),
+            solana_key.as_ref().map(|s| s.len()).unwrap_or(0)
+        );
+        
         Ok(AppConfig {
             garden: GardenConfig {
                 api_base_url: std::env::var("GARDEN_API_BASE_URL")
@@ -69,6 +79,7 @@ impl AppConfig {
                 }),
                 solana_address: std::env::var("WALLET_SOLANA")
                     .unwrap_or_else(|_| "YH4btvqb4JBWSEJh22MuA231ekpJ5JqbBXQY1apJtKH".to_string()),
+                solana_private_key: std::env::var("SOLANA_PRIVATE_KEY").ok(),
                 tron_address: std::env::var("WALLET_TRON")
                     .unwrap_or_else(|_| "TWbEz5ibiL6dreiLJ5oBF5CwDkw6Xfe6KX".to_string()),
                 sui_address: std::env::var("WALLET_SUI").unwrap_or_else(|_| {
@@ -94,6 +105,8 @@ impl AppConfig {
                     .unwrap_or_else(|_| "https://sepolia.base.org".to_string()),
                 arbitrum_sepolia: std::env::var("RPC_ARBITRUM_SEPOLIA")
                     .unwrap_or_else(|_| "https://sepolia-rollup.arbitrum.io/rpc".to_string()),
+                solana_testnet: std::env::var("RPC_SOLANA_TESTNET")
+                    .unwrap_or_else(|_| "https://api.testnet.solana.com".to_string()),
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),

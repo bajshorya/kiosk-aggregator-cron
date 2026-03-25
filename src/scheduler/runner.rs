@@ -1,4 +1,5 @@
 use crate::chains::evm_signer::EvmSigner;
+use crate::chains::solana_signer::SolanaSigner;
 use anyhow::Context;
 use std::sync::Arc;
 use tokio::sync::Mutex; // ← not std::sync::Mutex
@@ -243,6 +244,16 @@ impl SwapRunner {
         record.status = SwapStatus::Pending;
 
         info!(pair = %pair.label(), order_id = %order_id, "Order submitted");
+        
+        // Debug: Log the full order response to see what fields are available
+        info!(
+            pair = %pair.label(),
+            "Order response fields: versioned_tx={}, versioned_tx_gasless={}, initiate_transaction={}, typed_data={}",
+            order_resp.result.versioned_tx.is_some(),
+            order_resp.result.versioned_tx_gasless.is_some(),
+            order_resp.result.initiate_transaction.is_some(),
+            order_resp.result.typed_data.is_some()
+        );
 
         // Log UTXO deposit address prominently
         if requires_manual_deposit(&pair.source.asset) {
@@ -433,7 +444,67 @@ impl SwapRunner {
             }
 
             c if c.starts_with("solana_") => {
-                Err(anyhow::anyhow!("Solana signing not yet implemented"))
+                // Check if private key is configured
+                info!(
+                    asset = %source_asset,
+                    "Checking Solana private key: is_some={}",
+                    self.config.wallets.solana_private_key.is_some()
+                );
+                
+                let private_key = self
+                    .config
+                    .wallets
+                    .solana_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "SOLANA_PRIVATE_KEY not set in .env. \
+                            Please add your Solana private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = SolanaSigner::new(private_key)
+                    .context("Failed to create Solana signer")?;
+
+                // Get versioned_tx from the order response
+                let versioned_tx = order_result
+                    .versioned_tx
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No versioned_tx in Solana response"))?;
+
+                info!(
+                    asset = %source_asset,
+                    "Using versioned_tx ({} chars)",
+                    versioned_tx.len()
+                );
+
+                // Sign the transaction
+                info!(asset = %source_asset, "Signing Solana transaction...");
+                let signed_tx_base64 = signer
+                    .sign_transaction(versioned_tx)
+                    .map_err(|e| {
+                        error!(asset = %source_asset, error = %e, "Solana signing failed");
+                        anyhow::anyhow!("Failed to sign Solana transaction: {}", e)
+                    })?;
+
+                // Submit via gasless PATCH endpoint
+                let order_id = &order_result.order_id;
+                // Try without order_id in body since it's in the URL
+                let payload = serde_json::json!({
+                    "serialized_tx": signed_tx_base64
+                });
+
+                info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless endpoint...");
+                self.api
+                    .initiate_swap_gasless(order_id, payload)
+                    .await
+                    .map_err(|e| {
+                        error!(asset = %source_asset, error = %e, "Gasless initiation failed");
+                        anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
+                    })?;
+
+                info!(asset = %source_asset, order_id = %order_id, "Gasless initiation submitted successfully");
+                Ok(format!("gasless-{}", order_id))
             }
 
             c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => order_result

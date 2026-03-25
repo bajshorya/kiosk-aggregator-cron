@@ -1,4 +1,6 @@
 pub mod evm_signer;
+pub mod solana_signer;
+
 use crate::config::WalletConfig;
 #[derive(Debug, Clone)]
 pub struct ChainAsset {
@@ -23,7 +25,7 @@ impl SwapPair {
 /// Sequenced to minimize total cost by reusing received funds
 pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
     let btc = &wallets.bitcoin_testnet_address;
-    let ltc = &wallets.litecoin_testnet_address;
+    let _ltc = &wallets.litecoin_testnet_address;
     let evm = &wallets.evm_address;
     let stark = &wallets.starknet_address;
     let sol = &wallets.solana_address;
@@ -132,17 +134,24 @@ pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
         // pair!("litecoin_testnet:ltc", "1000000", ltc, "base_sepolia:wbtc", evm),
 
         // ═══ PHASE 7: Solana (requires manual deposit or existing balance) ═══
-        // Cost: $100 (2 × $50 SOL)
+        // Cost: $150 (3 × $50 SOL)
         pair!(
             "solana_testnet:sol",
-            "350000000",
+            "100000000",
             sol,
             "bitcoin_testnet:btc",
             btc
         ),
         pair!(
             "solana_testnet:sol",
-            "350000000",
+            "100000000",
+            sol,
+            "ethereum_sepolia:wbtc",
+            evm
+        ),
+        pair!(
+            "solana_testnet:sol",
+            "100000000",
             sol,
             "base_sepolia:wbtc",
             evm
