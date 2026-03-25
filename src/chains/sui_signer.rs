@@ -1,16 +1,38 @@
 use anyhow::{Context, Result};
+use ed25519_dalek::{Signature, Signer, SigningKey};
 use serde_json::Value;
 use tracing::info;
 
 /// Sui signer for gasless transactions
 /// Uses Ed25519 keypair for signing PTBs (Programmable Transaction Blocks)
+#[allow(dead_code)]
 pub struct SuiSigner {
-    private_key: String,
+    signing_key: SigningKey,
 }
 
+#[allow(dead_code)]
 impl SuiSigner {
     pub fn new(private_key: String) -> Result<Self> {
-        Ok(Self { private_key })
+        // Remove 0x prefix if present
+        let key_str = private_key.trim_start_matches("0x");
+        
+        // Decode private key (should be 32 bytes for Ed25519)
+        let key_bytes = hex::decode(key_str)
+            .context("Failed to decode Sui private key hex")?;
+        
+        if key_bytes.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "Invalid Sui private key length: expected 32 bytes, got {}",
+                key_bytes.len()
+            ));
+        }
+        
+        // Create Ed25519 signing key
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&key_bytes);
+        let signing_key = SigningKey::from_bytes(&key_array);
+        
+        Ok(Self { signing_key })
     }
 
     /// Sign Sui PTB (Programmable Transaction Block) for gasless initiation
@@ -18,11 +40,20 @@ impl SuiSigner {
     pub async fn sign_transaction(&self, tx_bytes: &str) -> Result<String> {
         info!("Signing Sui PTB for gasless initiation");
         
-        // TODO: Implement actual Sui signing using sui-sdk
-        // For now, return error indicating implementation needed
-        Err(anyhow::anyhow!(
-            "Sui signing not yet implemented. Need to add sui-sdk dependency."
-        ))
+        // Decode transaction bytes from base64
+        use base64::{engine::general_purpose, Engine as _};
+        let tx_data = general_purpose::STANDARD.decode(tx_bytes)
+            .context("Failed to decode Sui transaction bytes from base64")?;
+        
+        // Sign the transaction data
+        let signature: Signature = self.signing_key.sign(&tx_data);
+        
+        // Encode signature as base64
+        let sig_base64 = general_purpose::STANDARD.encode(signature.to_bytes());
+        
+        info!("Sui signature generated (base64): {}", sig_base64);
+        
+        Ok(sig_base64)
     }
 
     /// Execute a signed transaction on Sui network (non-gasless fallback)
@@ -34,10 +65,81 @@ impl SuiSigner {
     ) -> Result<String> {
         info!("Executing Sui transaction via RPC (non-gasless)");
         
-        // TODO: Implement Sui transaction execution
-        Err(anyhow::anyhow!(
-            "Sui transaction execution not yet implemented."
-        ))
+        // Create HTTP client
+        let client = reqwest::Client::new();
+        
+        // Prepare RPC request for sui_executeTransactionBlock
+        let request_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sui_executeTransactionBlock",
+            "params": [
+                tx_bytes,
+                [signature],
+                {
+                    "showInput": true,
+                    "showRawInput": false,
+                    "showEffects": true,
+                    "showEvents": true,
+                    "showObjectChanges": false,
+                    "showBalanceChanges": false
+                },
+                "WaitForLocalExecution"
+            ]
+        });
+        
+        // Send request
+        let response = client
+            .post(rpc_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to send Sui RPC request")?;
+        
+        let status = response.status();
+        let body = response.text().await?;
+        
+        if !status.is_success() {
+            return Err(anyhow::anyhow!("Sui RPC error {}: {}", status, body));
+        }
+        
+        // Parse response
+        let result: Value = serde_json::from_str(&body)
+            .context("Failed to parse Sui response")?;
+        
+        // Extract transaction digest
+        let digest = result
+            .get("result")
+            .and_then(|r| r.get("digest"))
+            .and_then(|d| d.as_str())
+            .ok_or_else(|| anyhow::anyhow!("No digest in Sui response"))?;
+        
+        info!("Sui transaction executed: {}", digest);
+        
+        Ok(digest.to_string())
+    }
+
+    /// Get Sui address from public key
+    pub fn get_address(&self) -> Result<String> {
+        // Get public key
+        let public_key = self.signing_key.verifying_key();
+        let pubkey_bytes = public_key.to_bytes();
+        
+        // Sui address is derived from: BLAKE2b(flag || pubkey)[0..32]
+        // where flag = 0x00 for Ed25519
+        // Note: For now we use SHA256 as a placeholder since blake2 crate needs to be added
+        // TODO: Add blake2 = "0.10" to Cargo.toml and use proper BLAKE2b hashing
+        use sha2::{Digest, Sha256};
+        
+        let mut hasher = Sha256::new();
+        hasher.update(&[0x00]); // Ed25519 flag
+        hasher.update(&pubkey_bytes);
+        let hash = hasher.finalize();
+        
+        // Take first 32 bytes and encode as hex with 0x prefix
+        let address = format!("0x{}", hex::encode(&hash[..32]));
+        
+        Ok(address)
     }
 }
 

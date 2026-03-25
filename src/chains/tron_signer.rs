@@ -1,28 +1,80 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
+use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+use sha2::{Digest, Sha256};
 use tracing::info;
 
 /// Tron signer for gasless transactions
-/// Uses TronWeb-compatible signing
+/// Uses ECDSA secp256k1 signing with SHA256 hashing
+#[allow(dead_code)]
 pub struct TronSigner {
-    private_key: String,
+    secret_key: SecretKey,
+    public_key: PublicKey,
 }
 
+#[allow(dead_code)]
 impl TronSigner {
     pub fn new(private_key: String) -> Result<Self> {
-        Ok(Self { private_key })
+        // Remove 0x prefix if present
+        let key_str = private_key.trim_start_matches("0x");
+        
+        // Parse private key as bytes
+        let key_bytes = hex::decode(key_str)
+            .context("Failed to decode Tron private key hex")?;
+        
+        // Create secp256k1 context
+        let secp = Secp256k1::new();
+        
+        // Create secret key
+        let secret_key = SecretKey::from_slice(&key_bytes)
+            .context("Invalid Tron private key")?;
+        
+        // Derive public key
+        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+        
+        Ok(Self {
+            secret_key,
+            public_key,
+        })
     }
 
     /// Sign Tron transaction for gasless initiation
-    /// Tron uses its own signing format (similar to Bitcoin ECDSA)
+    /// Tron uses ECDSA secp256k1 signing with SHA256 hash
     pub async fn sign_transaction(&self, tx_data: &Value) -> Result<String> {
         info!("Signing Tron transaction for gasless initiation");
         
-        // TODO: Implement actual Tron signing
-        // For now, return error indicating implementation needed
-        Err(anyhow::anyhow!(
-            "Tron signing not yet implemented. Need to add tron-rs or implement custom signing."
-        ))
+        // Get raw_data_hex from transaction
+        let raw_data_hex = tx_data
+            .get("raw_data_hex")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing raw_data_hex in transaction"))?;
+        
+        // Decode raw data
+        let raw_bytes = hex::decode(raw_data_hex.trim_start_matches("0x"))
+            .context("Failed to decode raw_data_hex")?;
+        
+        // Hash the raw data with SHA256 (Tron uses SHA256, not Keccak256)
+        let hash = Sha256::digest(&raw_bytes);
+        
+        // Create secp256k1 context
+        let secp = Secp256k1::new();
+        
+        // Create message from hash
+        let message = Message::from_digest_slice(&hash)
+            .context("Failed to create message from hash")?;
+        
+        // Sign the message
+        let signature = secp.sign_ecdsa(&message, &self.secret_key);
+        
+        // Serialize signature to compact format (64 bytes: r + s)
+        let sig_bytes = signature.serialize_compact();
+        
+        // Encode as hex with 0x prefix
+        let sig_hex = format!("0x{}", hex::encode(sig_bytes));
+        
+        info!("Tron signature generated: {}", sig_hex);
+        
+        Ok(sig_hex)
     }
 
     /// Send a signed transaction to Tron network (non-gasless fallback)
@@ -33,10 +85,64 @@ impl TronSigner {
     ) -> Result<String> {
         info!("Sending Tron transaction via RPC (non-gasless)");
         
-        // TODO: Implement Tron transaction broadcasting
-        Err(anyhow::anyhow!(
-            "Tron transaction broadcasting not yet implemented."
-        ))
+        // Create HTTP client
+        let client = reqwest::Client::new();
+        
+        // Tron RPC endpoint for broadcasting
+        let broadcast_url = format!("{}/wallet/broadcasttransaction", rpc_url);
+        
+        // Send transaction
+        let response = client
+            .post(&broadcast_url)
+            .json(signed_tx)
+            .send()
+            .await
+            .context("Failed to send Tron transaction")?;
+        
+        let status = response.status();
+        let body = response.text().await?;
+        
+        if !status.is_success() {
+            return Err(anyhow::anyhow!("Tron RPC error {}: {}", status, body));
+        }
+        
+        // Parse response
+        let result: Value = serde_json::from_str(&body)
+            .context("Failed to parse Tron response")?;
+        
+        // Extract transaction ID
+        let tx_id = result
+            .get("txid")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("No txid in Tron response"))?;
+        
+        info!("Tron transaction broadcasted: {}", tx_id);
+        
+        Ok(tx_id.to_string())
+    }
+
+    /// Get Tron address from public key
+    pub fn get_address(&self) -> Result<String> {
+        // Serialize public key (uncompressed, 65 bytes)
+        let pubkey_bytes = self.public_key.serialize_uncompressed();
+        
+        // Take last 64 bytes (skip the 0x04 prefix)
+        let pubkey_hash_input = &pubkey_bytes[1..];
+        
+        // Hash with SHA256 (Tron uses SHA256 for address derivation)
+        let hash = Sha256::digest(pubkey_hash_input);
+        
+        // Take last 20 bytes
+        let address_bytes = &hash[12..];
+        
+        // Add Tron prefix (0x41 for mainnet, 0xa0 for testnet)
+        let mut full_address = vec![0x41]; // Mainnet prefix
+        full_address.extend_from_slice(address_bytes);
+        
+        // Encode as base58
+        let address = bs58::encode(&full_address).into_string();
+        
+        Ok(address)
     }
 }
 

@@ -13,6 +13,9 @@ pub struct RpcUrlsConfig {
     pub base_sepolia: String,
     pub arbitrum_sepolia: String,
     pub solana_testnet: String,
+    pub starknet_sepolia: String,
+    pub tron_shasta: String,
+    pub sui_testnet: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WalletConfig {
@@ -21,10 +24,13 @@ pub struct WalletConfig {
     pub evm_address: String,
     pub evm_private_key: String,
     pub starknet_address: String,
+    pub starknet_private_key: Option<String>,
     pub solana_address: String,
     pub solana_private_key: Option<String>,
     pub tron_address: String,
+    pub tron_private_key: Option<String>,
     pub sui_address: String,
+    pub sui_private_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -77,14 +83,17 @@ impl AppConfig {
                 starknet_address: std::env::var("WALLET_STARKNET").unwrap_or_else(|_| {
                     "0x00609190b1348bcc06da44d58c79709495c11a5a6f0b9e154e1209f2a17dd933".to_string()
                 }),
+                starknet_private_key: std::env::var("STARKNET_PRIVATE_KEY").ok(),
                 solana_address: std::env::var("WALLET_SOLANA")
                     .unwrap_or_else(|_| "YH4btvqb4JBWSEJh22MuA231ekpJ5JqbBXQY1apJtKH".to_string()),
                 solana_private_key: std::env::var("SOLANA_PRIVATE_KEY").ok(),
                 tron_address: std::env::var("WALLET_TRON")
                     .unwrap_or_else(|_| "TWbEz5ibiL6dreiLJ5oBF5CwDkw6Xfe6KX".to_string()),
+                tron_private_key: std::env::var("TRON_PRIVATE_KEY").ok(),
                 sui_address: std::env::var("WALLET_SUI").unwrap_or_else(|_| {
                     "0x79a1582388c16d0ab85904f320eb0527481391a9b9ab4b2ab46adc4c2564f9d0".to_string()
                 }),
+                sui_private_key: std::env::var("SUI_PRIVATE_KEY").ok(),
             },
             scheduler: SchedulerConfig {
                 cron: std::env::var("SCHEDULER_CRON")
@@ -107,6 +116,12 @@ impl AppConfig {
                     .unwrap_or_else(|_| "https://sepolia-rollup.arbitrum.io/rpc".to_string()),
                 solana_testnet: std::env::var("RPC_SOLANA_TESTNET")
                     .unwrap_or_else(|_| "https://api.testnet.solana.com".to_string()),
+                starknet_sepolia: std::env::var("RPC_STARKNET_SEPOLIA")
+                    .unwrap_or_else(|_| "https://starknet-sepolia.public.blastapi.io".to_string()),
+                tron_shasta: std::env::var("RPC_TRON_SHASTA")
+                    .unwrap_or_else(|_| "https://api.shasta.trongrid.io".to_string()),
+                sui_testnet: std::env::var("RPC_SUI_TESTNET")
+                    .unwrap_or_else(|_| "https://fullnode.testnet.sui.io:443".to_string()),
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),

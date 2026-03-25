@@ -44,8 +44,8 @@ impl GardenApiClient {
     }
 
     /// Authenticate using SIWE to enable gasless transactions
+    #[allow(dead_code)]
     pub async fn authenticate_siwe(&mut self, evm_private_key: &str) -> Result<()> {
-        use ethers::prelude::*;
         use ethers::signers::{LocalWallet, Signer};
         
         info!("Authenticating with SIWE to enable gasless transactions...");
@@ -395,6 +395,7 @@ impl GardenApiClient {
     }
 
     /// Initiate swap using gasless PATCH endpoint (legacy, for compatibility)
+    #[allow(dead_code)]
     pub async fn initiate_swap_gasless(
         &self,
         order_id: &str,
