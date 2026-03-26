@@ -90,11 +90,18 @@ impl EvmSigner {
 
         info!("Broadcasting transaction to chain_id={}", chain_id);
         
+        // Check balance first
+        let balance = client.get_balance(self.wallet.address(), None).await
+            .context("Failed to get wallet balance")?;
+        info!("Wallet balance: {} wei ({} ETH)", balance, ethers::utils::format_units(balance, "ether").unwrap_or_default());
+        
         // Send transaction
         let pending_tx = client
             .send_transaction(tx, None)
             .await
-            .context("Failed to send transaction")?;
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to send transaction: {}. This usually means insufficient gas (need testnet ETH) or network issues.", e)
+            })?;
 
         let tx_hash = format!("{:?}", pending_tx.tx_hash());
         info!("Transaction sent: {}", tx_hash);

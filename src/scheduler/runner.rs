@@ -411,27 +411,28 @@ impl SwapRunner {
                 || c.starts_with("base_")
                 || c.starts_with("arbitrum_") =>
             {
+                let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
+                
+                // Check if approval transaction is needed (for ERC20 tokens)
+                if let Some(approval_tx) = &order_result.approval_transaction {
+                    info!("Approval transaction required for ERC20 token");
+                    let rpc_url = self.rpc_url_for_chain(chain)?;
+                    
+                    info!("Executing approval transaction via RPC");
+                    let approval_hash = signer.send_transaction(approval_tx, &rpc_url).await?;
+                    info!("Approval transaction sent: {}", approval_hash);
+                    
+                    // Wait a bit for approval to be mined
+                    info!("Waiting 10s for approval transaction to be mined...");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                }
+                
                 // Check if gasless is available (typed_data present)
                 if let Some(typed_data) = &order_result.typed_data {
                     // Use EIP-712 gasless flow
                     info!("Using EIP-712 gasless initiation for {}", source_asset);
-                    let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
                     
-                    // Check if approval transaction is needed (for ERC20 tokens)
-                    if let Some(approval_tx) = &order_result.approval_transaction {
-                        info!("Approval transaction required for ERC20 token");
-                        let rpc_url = self.rpc_url_for_chain(chain)?;
-                        
-                        info!("Executing approval transaction via RPC");
-                        let approval_hash = signer.send_transaction(approval_tx, &rpc_url).await?;
-                        info!("Approval transaction sent: {}", approval_hash);
-                        
-                        // Wait a bit for approval to be mined
-                        info!("Waiting 10s for approval transaction to be mined...");
-                        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-                    }
-                    
-                    // Now sign typed data for gasless initiation
+                    // Sign typed data for gasless initiation
                     let signature = signer.sign_typed_data(typed_data).await?;
 
                     let order_id = &order_result.order_id;
@@ -447,10 +448,9 @@ impl SwapRunner {
                     // Fallback to traditional transaction broadcasting
                     warn!(
                         asset = %source_asset,
-                        "Gasless not enabled. Using traditional transaction broadcasting."
+                        "Gasless not enabled (typed_data=null). Using traditional transaction broadcasting."
                     );
                     
-                    let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
                     let rpc_url = self.rpc_url_for_chain(chain)?;
                     
                     info!("Broadcasting EVM transaction via RPC");
