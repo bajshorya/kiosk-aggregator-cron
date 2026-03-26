@@ -94,51 +94,118 @@ impl SwapRunner {
     }
 
     /// Run all swap pairs CONCURRENTLY - all swaps start at once
-    pub async fn run_all(&self) -> RunSummary {
+    /// Run all swap pairs in batches, filtering by available balance
+    pub async fn run_all(&self, check_balance: bool) -> RunSummary {
         let run_id = Uuid::new_v4().to_string();
         let started_at = Utc::now();
-        let pairs = all_swap_pairs(&self.config.wallets);
-        let total = pairs.len();
+        let all_pairs = all_swap_pairs(&self.config.wallets);
+        
+        info!(run_id = %run_id, "=== Starting BATCHED swap test run ({} pairs) ===", all_pairs.len());
+        info!("Running swaps in batches of 10 to avoid overwhelming the system");
 
-        info!(run_id = %run_id, "=== Starting CONCURRENT swap test run ({} pairs) ===", total);
-        info!("All swaps will start simultaneously!");
-
-        // Spawn all swaps as concurrent tasks
-        let mut set: JoinSet<SwapRecord> = JoinSet::new();
-
-        for pair in pairs {
-            let api = Arc::clone(&self.api);
-            let db = Arc::clone(&self.db);
-            let config = self.config.clone();
-            let run_id_c = run_id.clone();
-
-            let evm_lock = Arc::clone(&self.evm_lock);
-            set.spawn(async move {
-                let runner = SwapRunner {
-                    api,
-                    db,
-                    config,
-                    evm_lock,
-                };
-                runner.run_single_swap(&run_id_c, &pair).await
-            });
-        }
-
-        // Collect results as tasks complete
-        let mut records: Vec<SwapRecord> = Vec::with_capacity(total);
-        while let Some(res) = set.join_next().await {
-            match res {
-                Ok(record) => {
-                    info!(
-                        pair = %record.swap_pair,
-                        status = %record.status,
-                        duration = ?record.duration_secs,
-                        "✅ Task finished"
-                    );
-                    records.push(record);
+        // Filter pairs based on available balance (only if check_balance is enabled)
+        let executable_pairs = if check_balance {
+            info!("Checking balances for EVM chains only (fast check)...");
+            let mut filtered_pairs = Vec::new();
+            
+            for pair in &all_pairs {
+                let chain = pair.source.asset.split(':').next().unwrap_or("");
+                
+                // Only check balance for EVM chains (Arbitrum, Base, Ethereum)
+                // Skip balance check for other chains to avoid delays
+                if !chain.contains("arbitrum") && !chain.contains("base") && !chain.contains("ethereum") {
+                    filtered_pairs.push(pair.clone());
+                    continue;
                 }
-                Err(e) => error!("Swap task panicked: {}", e),
+
+                let rpc_url = match self.rpc_url_for_chain(chain) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        info!("Skipping {} (no RPC configured)", pair.label());
+                        continue;
+                    }
+                };
+
+                match crate::chains::balance_checker::check_balance(
+                    chain,
+                    &pair.source.asset,
+                    &pair.source.owner,
+                    &pair.source.default_from_amount,
+                    &rpc_url,
+                )
+                .await
+                {
+                    Ok(true) => {
+                        filtered_pairs.push(pair.clone());
+                    }
+                    Ok(false) => {
+                        info!("⏭️  Skipping {} (insufficient balance)", pair.label());
+                    }
+                    Err(e) => {
+                        warn!("Balance check error for {}: {}, will attempt anyway", pair.label(), e);
+                        filtered_pairs.push(pair.clone());
+                    }
+                }
             }
+
+            info!(
+                "✅ Balance check complete: {}/{} pairs will be attempted",
+                filtered_pairs.len(),
+                all_pairs.len()
+            );
+            filtered_pairs
+        } else {
+            info!("Balance checking disabled - attempting all {} pairs", all_pairs.len());
+            all_pairs.clone()
+        };
+
+        let total = executable_pairs.len();
+
+        let batch_size = 10;
+        let mut records: Vec<SwapRecord> = Vec::with_capacity(total);
+
+        // Process swaps in batches
+        for (batch_num, chunk) in executable_pairs.chunks(batch_size).enumerate() {
+            info!("Starting batch {}/{} ({} swaps)", batch_num + 1, (total + batch_size - 1) / batch_size, chunk.len());
+            
+            let mut set: JoinSet<SwapRecord> = JoinSet::new();
+
+            for pair in chunk {
+                let api = Arc::clone(&self.api);
+                let db = Arc::clone(&self.db);
+                let config = self.config.clone();
+                let run_id_c = run_id.clone();
+                let pair_c = pair.clone();
+
+                let evm_lock = Arc::clone(&self.evm_lock);
+                set.spawn(async move {
+                    let runner = SwapRunner {
+                        api,
+                        db,
+                        config,
+                        evm_lock,
+                    };
+                    runner.run_single_swap(&run_id_c, &pair_c).await
+                });
+            }
+
+            // Collect results for this batch
+            while let Some(res) = set.join_next().await {
+                match res {
+                    Ok(record) => {
+                        info!(
+                            pair = %record.swap_pair,
+                            status = %record.status,
+                            duration = ?record.duration_secs,
+                            "✅ Task finished"
+                        );
+                        records.push(record);
+                    }
+                    Err(e) => error!("Swap task panicked: {}", e),
+                }
+            }
+
+            info!("Batch {}/{} complete", batch_num + 1, (total + batch_size - 1) / batch_size);
         }
 
         let completed = records

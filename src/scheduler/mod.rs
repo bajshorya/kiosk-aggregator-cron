@@ -32,8 +32,8 @@ pub async fn start_scheduler(
         let db = Arc::clone(&db_c);
         Box::pin(async move {
             info!("Cron fired — starting swap test run");
-            let runner = SwapRunner::new(api, db, config);
-            let summary = runner.run_all().await;
+            let runner = SwapRunner::new(api, db, config.clone());
+            let summary = runner.run_all(config.enable_balance_check).await;
             print_summary(&summary);
         })
     })?;

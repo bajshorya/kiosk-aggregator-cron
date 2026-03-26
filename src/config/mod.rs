@@ -40,6 +40,19 @@ pub struct SchedulerConfig {
     pub poll_interval_secs: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkMode {
+    Testnet,
+    Mainnet,
+}
+
+impl Default for NetworkMode {
+    fn default() -> Self {
+        NetworkMode::Testnet
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AppConfig {
     pub garden: GardenConfig,
@@ -47,6 +60,8 @@ pub struct AppConfig {
     pub scheduler: SchedulerConfig,
     pub database_url: String,
     pub rpc_urls: RpcUrlsConfig,
+    pub network_mode: NetworkMode,
+    pub enable_balance_check: bool,
 }
 
 impl AppConfig {
@@ -60,10 +75,26 @@ impl AppConfig {
             solana_key.as_ref().map(|s| s.len()).unwrap_or(0)
         );
         
+        let network_mode = std::env::var("NETWORK_MODE")
+            .unwrap_or_else(|_| "testnet".to_string())
+            .to_lowercase();
+        
+        let network_mode = match network_mode.as_str() {
+            "mainnet" => NetworkMode::Mainnet,
+            _ => NetworkMode::Testnet,
+        };
+
+        eprintln!("🌐 Network mode: {:?}", network_mode);
+        
         Ok(AppConfig {
             garden: GardenConfig {
                 api_base_url: std::env::var("GARDEN_API_BASE_URL")
-                    .unwrap_or_else(|_| "https://testnet.api.garden.finance".to_string()),
+                    .unwrap_or_else(|_| {
+                        match network_mode {
+                            NetworkMode::Mainnet => "https://api.garden.finance".to_string(),
+                            NetworkMode::Testnet => "https://testnet.api.garden.finance".to_string(),
+                        }
+                    }),
                 app_id: std::env::var("GARDEN_APP_ID").unwrap_or_else(|_| {
                     "f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796".to_string()
                 }),
@@ -125,6 +156,11 @@ impl AppConfig {
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),
+            network_mode,
+            enable_balance_check: std::env::var("ENABLE_BALANCE_CHECK")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(true), // Default to true
         })
     }
 

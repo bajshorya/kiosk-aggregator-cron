@@ -90,10 +90,21 @@ impl EvmSigner {
 
         info!("Broadcasting transaction to chain_id={}", chain_id);
         
-        // Check balance first
-        let balance = client.get_balance(self.wallet.address(), None).await
-            .context("Failed to get wallet balance")?;
-        info!("Wallet balance: {} wei ({} ETH)", balance, ethers::utils::format_units(balance, "ether").unwrap_or_default());
+        // Check balance first (with timeout to avoid blocking)
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            client.get_balance(self.wallet.address(), None)
+        ).await {
+            Ok(Ok(balance)) => {
+                info!("Wallet balance: {} wei ({} ETH)", balance, ethers::utils::format_units(balance, "ether").unwrap_or_default());
+            }
+            Ok(Err(e)) => {
+                info!("Could not check balance ({}), proceeding with transaction anyway", e);
+            }
+            Err(_) => {
+                info!("Balance check timed out after 10s, proceeding with transaction anyway");
+            }
+        }
         
         // Send transaction
         let pending_tx = client

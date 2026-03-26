@@ -34,10 +34,12 @@ async fn main() -> Result<()> {
     })?;
 
     info!("Garden Swap Tester starting up");
+    info!("Network mode: {:?}", config.network_mode);
     info!("API base URL: {}", config.garden.api_base_url);
     info!("Scheduler cron: {}", config.scheduler.cron);
     info!("Swap timeout: {}s", config.scheduler.swap_timeout_secs);
     info!("Database: {}", config.database_url);
+    info!("Balance checking: {}", if config.enable_balance_check { "ENABLED" } else { "DISABLED" });
 
     // Parse command from first CLI arg
     let args: Vec<String> = std::env::args().collect();
@@ -52,8 +54,8 @@ async fn main() -> Result<()> {
         // Run once immediately (useful for CI / one-shot testing)
         "run-once" => {
             info!("Mode: run-once — executing all swaps concurrently");
-            let runner = SwapRunner::new(api, db, config);
-            let summary = runner.run_all().await;
+            let runner = SwapRunner::new(api, db, config.clone());
+            let summary = runner.run_all(config.enable_balance_check).await;
 
             println!("\n═══ Final Run Summary ═══");
             println!("Run ID   : {}", summary.run_id);
