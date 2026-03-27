@@ -1,5 +1,7 @@
 use crate::chains::evm_signer::EvmSigner;
 use crate::chains::solana_signer::SolanaSigner;
+use crate::chains::starknet_signer::StarknetSigner;
+use crate::chains::tron_signer::TronSigner;
 use anyhow::Context;
 use std::sync::Arc;
 use tokio::sync::Mutex; // ← not std::sync::Mutex
@@ -36,15 +38,26 @@ impl SwapRunner {
     }
 
     /// Test a single swap pair by asset names
+    #[allow(dead_code)]
     pub async fn test_single_swap(
         &self,
         from_asset: &str,
         to_asset: &str,
     ) -> Result<SwapRecord, anyhow::Error> {
+        self.test_single_swap_with_amount(from_asset, to_asset, None).await
+    }
+
+    /// Test a single swap pair by asset names with custom amount
+    pub async fn test_single_swap_with_amount(
+        &self,
+        from_asset: &str,
+        to_asset: &str,
+        custom_amount: Option<String>,
+    ) -> Result<SwapRecord, anyhow::Error> {
         use crate::chains::all_swap_pairs;
 
         let pairs = all_swap_pairs(&self.config.wallets);
-        let pair = pairs
+        let mut pair = pairs
             .iter()
             .find(|p| p.source.asset == from_asset && p.destination.asset == to_asset)
             .ok_or_else(|| {
@@ -53,12 +66,18 @@ impl SwapRunner {
                     from_asset,
                     to_asset
                 )
-            })?;
+            })?
+            .clone();
+
+        // Override amount if provided
+        if let Some(amount) = custom_amount {
+            pair.source.default_from_amount = amount;
+        }
 
         let run_id = uuid::Uuid::new_v4().to_string();
         info!("Testing single swap: {}", pair.label());
 
-        let record = self.run_single_swap(&run_id, pair).await;
+        let record = self.run_single_swap(&run_id, &pair).await;
 
         // Save to database
         let summary = crate::models::RunSummary {
@@ -551,10 +570,119 @@ impl SwapRunner {
                     ))
                 }
             }
-            c if c.starts_with("tron_") => Err(anyhow::anyhow!("Tron signing not yet implemented")),
+            c if c.starts_with("tron_") => {
+                // Check if Tron private key is configured
+                let private_key = self
+                    .config
+                    .wallets
+                    .tron_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "TRON_PRIVATE_KEY not set in .env. \
+                            Please add your Tron private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = TronSigner::new(private_key.clone())?;
+                
+                // Check if approval transaction is needed
+                if let Some(_approval_tx) = &order_result.approval_transaction {
+                    info!("Approval transaction required for Tron token");
+                    let _rpc_url = self.rpc_url_for_chain(chain)?;
+                    
+                    // For Tron, we need to sign and broadcast the approval
+                    // This is a simplified version - in production, use proper Tron transaction handling
+                    warn!("Tron approval transaction handling not fully implemented");
+                }
+                
+                // Check if gasless is available (typed_data present)
+                if let Some(typed_data) = &order_result.typed_data {
+                    info!("Attempting gasless initiation for {}", source_asset);
+                    
+                    // Sign typed data for gasless initiation
+                    let signature = signer.sign_typed_data(typed_data).await?;
+
+                    let order_id = &order_result.order_id;
+                    info!("Submitting Tron signature for order {}", order_id);
+                    
+                    // Try gasless
+                    match self.api.initiate_swap_gasless_tron(order_id, &signature).await {
+                        Ok(_) => {
+                            info!("Tron gasless initiation submitted successfully");
+                            return Ok(format!("gasless-tron-{}", order_id));
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Gasless initiation failed: {}. Tron non-gasless not yet implemented.",
+                                e
+                            );
+                            return Err(anyhow::anyhow!("Tron gasless failed and non-gasless not implemented"));
+                        }
+                    }
+                } else {
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not available (typed_data=null). Tron non-gasless not yet implemented."
+                    );
+                    Err(anyhow::anyhow!("Tron non-gasless transaction broadcasting not yet implemented"))
+                }
+            }
 
             c if c.starts_with("starknet_") => {
-                Err(anyhow::anyhow!("Starknet signing not yet implemented"))
+                // Check if Starknet private key is configured
+                let private_key = self
+                    .config
+                    .wallets
+                    .starknet_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "STARKNET_PRIVATE_KEY not set in .env. \
+                            Please add your Starknet private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = StarknetSigner::new(private_key.clone())?;
+                
+                // Check if approval transaction is needed
+                if let Some(_approval_tx) = &order_result.approval_transaction {
+                    info!("Approval transaction required for Starknet token");
+                    // Starknet approval handling would go here
+                    warn!("Starknet approval transaction handling not fully implemented");
+                }
+                
+                // Check if gasless is available (typed_data present)
+                if let Some(typed_data) = &order_result.typed_data {
+                    info!("Attempting gasless initiation for {}", source_asset);
+                    
+                    // Sign typed data for gasless initiation
+                    let signature = signer.sign_typed_data(typed_data).await?;
+
+                    let order_id = &order_result.order_id;
+                    info!("Submitting Starknet signature for order {}", order_id);
+                    
+                    // Try gasless
+                    match self.api.initiate_swap_gasless_starknet(order_id, &signature).await {
+                        Ok(_) => {
+                            info!("Starknet gasless initiation submitted successfully");
+                            return Ok(format!("gasless-starknet-{}", order_id));
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Gasless initiation failed: {}. Starknet non-gasless not yet implemented.",
+                                e
+                            );
+                            return Err(anyhow::anyhow!("Starknet gasless failed and non-gasless not implemented"));
+                        }
+                    }
+                } else {
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not available (typed_data=null). Starknet non-gasless not yet implemented."
+                    );
+                    Err(anyhow::anyhow!("Starknet non-gasless transaction broadcasting not yet implemented"))
+                }
             }
 
             c if c.starts_with("solana_") => {

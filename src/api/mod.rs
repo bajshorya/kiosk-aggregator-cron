@@ -394,6 +394,114 @@ impl GardenApiClient {
         Ok(tx_hash)
     }
 
+    /// Initiate swap using gasless endpoint (for Starknet)
+    /// Uses PATCH to /v2/orders/{id}?action=initiate with signature
+    pub async fn initiate_swap_gasless_starknet(
+        &self,
+        order_id: &str,
+        signature: &str,
+    ) -> Result<()> {
+        let url = format!(
+            "{}/v2/orders/{}?action=initiate",
+            self.config.api_base_url, order_id
+        );
+
+        info!("PATCH initiate swap (gasless Starknet) for order {}", order_id);
+        
+        let payload = serde_json::json!({
+            "signature": signature
+        });
+        
+        info!("Request URL: {}", url);
+        info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+
+        let (hk, hv) = self.app_id_header();
+        
+        let resp = self
+            .client
+            .patch(&url)
+            .header(hk, &hv)
+            .header("content-type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .context("Initiate swap gasless Starknet request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read initiate response body")?;
+        info!("Initiate response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Initiate swap API {} - {}", status, body));
+        }
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).context("Failed to parse initiate response")?;
+
+        if parsed.get("status").and_then(|s| s.as_str()) != Some("Ok") {
+            return Err(anyhow!("Initiate swap non-Ok: {}", body));
+        }
+
+        Ok(())
+    }
+
+    /// Initiate swap using gasless endpoint (for Tron)
+    /// Uses PATCH to /v2/orders/{id}?action=initiate with signature
+    pub async fn initiate_swap_gasless_tron(
+        &self,
+        order_id: &str,
+        signature: &str,
+    ) -> Result<()> {
+        let url = format!(
+            "{}/v2/orders/{}?action=initiate",
+            self.config.api_base_url, order_id
+        );
+
+        info!("PATCH initiate swap (gasless Tron) for order {}", order_id);
+        
+        let payload = serde_json::json!({
+            "signature": signature
+        });
+        
+        info!("Request URL: {}", url);
+        info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+
+        let (hk, hv) = self.app_id_header();
+        
+        let resp = self
+            .client
+            .patch(&url)
+            .header(hk, &hv)
+            .header("content-type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .context("Initiate swap gasless Tron request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read initiate response body")?;
+        info!("Initiate response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Initiate swap API {} - {}", status, body));
+        }
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).context("Failed to parse initiate response")?;
+
+        if parsed.get("status").and_then(|s| s.as_str()) != Some("Ok") {
+            return Err(anyhow!("Initiate swap non-Ok: {}", body));
+        }
+
+        Ok(())
+    }
+
     /// Initiate swap using gasless PATCH endpoint (legacy, for compatibility)
     #[allow(dead_code)]
     pub async fn initiate_swap_gasless(

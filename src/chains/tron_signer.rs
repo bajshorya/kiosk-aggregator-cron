@@ -6,13 +6,11 @@ use tracing::info;
 
 /// Tron signer for gasless transactions
 /// Uses ECDSA secp256k1 signing with SHA256 hashing
-#[allow(dead_code)]
 pub struct TronSigner {
     secret_key: SecretKey,
     public_key: PublicKey,
 }
 
-#[allow(dead_code)]
 impl TronSigner {
     pub fn new(private_key: String) -> Result<Self> {
         // Remove 0x prefix if present
@@ -38,10 +36,44 @@ impl TronSigner {
         })
     }
 
-    /// Sign Tron transaction for gasless initiation
-    /// Tron uses ECDSA secp256k1 signing with SHA256 hash
+    /// Sign Tron typed data for gasless initiation
+    /// Tron uses EIP-712-like signing, returns hex signature
+    pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<String> {
+        info!("Signing Tron typed data for gasless initiation");
+        
+        // Extract the message hash from typed_data
+        // The Garden API provides typed_data similar to EVM
+        let message_str = serde_json::to_string(typed_data)?;
+        
+        // Hash the typed data with SHA256 (Tron uses SHA256)
+        let hash = Sha256::digest(message_str.as_bytes());
+        
+        // Create secp256k1 context
+        let secp = Secp256k1::new();
+        
+        // Create message from hash
+        let message = Message::from_digest_slice(&hash)
+            .context("Failed to create message from hash")?;
+        
+        // Sign the message
+        let signature = secp.sign_ecdsa(&message, &self.secret_key);
+        
+        // Serialize signature to compact format (64 bytes: r + s)
+        let sig_bytes = signature.serialize_compact();
+        
+        // Encode as hex with 0x prefix
+        let sig_hex = format!("0x{}", hex::encode(sig_bytes));
+        
+        info!("Tron signature generated: {}", sig_hex);
+        
+        Ok(sig_hex)
+    }
+
+    /// Sign Tron transaction for non-gasless initiation
+    /// Used when gasless is not available
+    #[allow(dead_code)]
     pub async fn sign_transaction(&self, tx_data: &Value) -> Result<String> {
-        info!("Signing Tron transaction for gasless initiation");
+        info!("Signing Tron transaction for non-gasless initiation");
         
         // Get raw_data_hex from transaction
         let raw_data_hex = tx_data
@@ -78,6 +110,7 @@ impl TronSigner {
     }
 
     /// Send a signed transaction to Tron network (non-gasless fallback)
+    #[allow(dead_code)]
     pub async fn send_raw_transaction(
         &self,
         signed_tx: &Value,
@@ -122,6 +155,7 @@ impl TronSigner {
     }
 
     /// Get Tron address from public key
+    #[allow(dead_code)]
     pub fn get_address(&self) -> Result<String> {
         // Serialize public key (uncompressed, 65 bytes)
         let pubkey_bytes = self.public_key.serialize_uncompressed();
