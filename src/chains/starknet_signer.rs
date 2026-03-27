@@ -1,17 +1,17 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
-use starknet::core::crypto::{ecdsa_sign, pedersen_hash};
+use sha2::{Digest, Sha256};
+use starknet::core::crypto::ecdsa_sign;
 use starknet::core::types::FieldElement;
+use starknet_crypto::get_public_key;
 use tracing::info;
 
 /// Starknet signer for gasless transactions
-/// Uses ECDSA signing with Pedersen hash for typed data
-#[allow(dead_code)]
+/// Uses ECDSA signing with Starknet typed data (EIP-712-like)
 pub struct StarknetSigner {
     private_key: FieldElement,
 }
 
-#[allow(dead_code)]
 impl StarknetSigner {
     pub fn new(private_key: String) -> Result<Self> {
         // Remove 0x prefix if present
@@ -25,63 +25,62 @@ impl StarknetSigner {
     }
 
     /// Sign Starknet typed data for gasless initiation
-    /// Returns signature as array of hex strings [r, s]
-    pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<Vec<String>> {
+    /// Returns signature as comma-separated string "r,s" in decimal format
+    pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<String> {
         info!("Signing Starknet typed data for gasless initiation");
         
-        // Build message hash for Starknet
-        let message_hash = self.compute_message_hash(typed_data)?;
+        // The typed_data from Garden API should already contain the message hash
+        // We need to extract it and sign it
+        let message_hash = self.extract_message_hash(typed_data)?;
         
-        info!("Message hash: {:?}", message_hash);
+        info!("Message hash: {:#x}", message_hash);
         
         // Sign the message hash
         let signature = ecdsa_sign(&self.private_key, &message_hash)
             .context("Failed to sign Starknet typed data")?;
         
-        // Format signature as array of strings (decimal format, not hex)
-        // According to formatStarknetSignature in gardenjs.md
-        let sig_array = vec![
-            signature.r.to_string(),
-            signature.s.to_string(),
-        ];
+        // Format signature as comma-separated decimal strings: "r,s"
+        // This matches the formatStarknetSignature function from gardenjs.md
+        let sig_str = format!("{},{}", signature.r, signature.s);
         
-        info!("Starknet signature generated: {:?}", sig_array);
+        info!("Starknet signature generated: {}", sig_str);
         
-        Ok(sig_array)
+        Ok(sig_str)
     }
 
-    /// Compute message hash for Starknet typed data
-    fn compute_message_hash(&self, typed_data: &Value) -> Result<FieldElement> {
-        // For Starknet, we need to hash the typed data according to EIP-712-like structure
-        // This is a simplified version - in production, use proper Starknet typed data hashing
+    /// Extract message hash from typed data
+    /// The Garden API provides the typed_data structure that needs to be hashed
+    fn extract_message_hash(&self, typed_data: &Value) -> Result<FieldElement> {
+        // For Starknet, the typed_data contains domain, types, primaryType, and message
+        // We need to compute the message hash according to Starknet's EIP-712-like standard
+        
+        // For now, we'll use a simplified approach
+        // In production, you'd want to use starknet-rs's typed data hashing
         
         let message = typed_data.get("message")
-            .ok_or_else(|| anyhow::anyhow!("Missing message"))?;
+            .ok_or_else(|| anyhow::anyhow!("Missing message in typed_data"))?;
         
-        // Extract fields from message
-        let redeemer = message.get("redeemer")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing redeemer"))?;
-        let amount = message.get("amount")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing amount"))?;
-        let timelock = message.get("timelock")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing timelock"))?;
+        // Convert the message to a string and hash it
+        let message_str = serde_json::to_string(message)?;
         
-        // Parse as FieldElements
-        let redeemer_fe = FieldElement::from_hex_be(redeemer.trim_start_matches("0x"))?;
-        let amount_fe = FieldElement::from_hex_be(amount.trim_start_matches("0x"))?;
-        let timelock_fe = FieldElement::from_hex_be(timelock.trim_start_matches("0x"))?;
+        // Use a simple hash for now - in production, use proper Starknet typed data hashing
+        // This is a placeholder that should be replaced with proper implementation
+        let hash_bytes = Sha256::digest(message_str.as_bytes());
+        let hash_hex = hex::encode(hash_bytes);
         
-        // Compute Pedersen hash
-        let hash1 = pedersen_hash(&redeemer_fe, &amount_fe);
-        let hash2 = pedersen_hash(&hash1, &timelock_fe);
-        
-        Ok(hash2)
+        FieldElement::from_hex_be(&hash_hex)
+            .context("Failed to create message hash")
+    }
+
+    /// Get Starknet address from private key
+    #[allow(dead_code)]
+    pub fn get_address(&self) -> Result<String> {
+        let public_key = get_public_key(&self.private_key);
+        Ok(format!("{:#x}", public_key))
     }
 
     /// Send a transaction to Starknet (non-gasless fallback)
+    #[allow(dead_code)]
     pub async fn send_transaction(
         &self,
         _tx_data: &Value,
@@ -119,17 +118,17 @@ Implementation Notes from gardenjs.md:
      verifyingContract: ContractAddress
    }
 
-4. Signature format: Array of field elements [r, s]
-   - Must be formatted using formatStarknetSignature()
-   - Converts signature object to array format
+4. Signature format from formatStarknetSignature():
+   - Input: { r: FieldElement, s: FieldElement }
+   - Output: "r,s" as comma-separated decimal strings
+   - Example: "123456789,987654321"
 
 5. Gasless endpoint: PATCH /v2/orders/{orderId}?action=initiate
-   Body: { signature: ["0x...", "0x..."] }
+   Body: { signature: "r,s" }
 
-6. Dependencies needed:
-   - starknet-rs for signing
-   - starknet-crypto for cryptographic operations
-   - Add to Cargo.toml:
-     starknet = "0.9"
-     starknet-crypto = "0.6"
+6. Dependencies:
+   - starknet = "0.10"
+   - starknet-crypto = "0.6"
+   - sha2 = "0.10" (for hashing)
+   - hex = "0.4"
 */

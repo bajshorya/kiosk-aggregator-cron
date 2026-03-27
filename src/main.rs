@@ -92,16 +92,23 @@ async fn main() -> Result<()> {
         // Test a single swap pair
         "test-swap" => {
             let swap_spec = args.get(2).ok_or_else(|| {
-                anyhow::anyhow!("Usage: cargo run --release -- test-swap <from_asset> <to_asset>\nExample: cargo run --release -- test-swap ethereum_sepolia:wbtc base_sepolia:wbtc")
+                anyhow::anyhow!("Usage: cargo run --release -- test-swap <from_asset> <to_asset> [amount]\nExample: cargo run --release -- test-swap ethereum_sepolia:wbtc base_sepolia:wbtc\nExample: cargo run --release -- test-swap solana_testnet:usdc arbitrum_sepolia:usdc 200000000")
             })?;
             let to_asset = args.get(3).ok_or_else(|| {
-                anyhow::anyhow!("Usage: cargo run --release -- test-swap <from_asset> <to_asset>\nExample: cargo run --release -- test-swap ethereum_sepolia:wbtc base_sepolia:wbtc")
+                anyhow::anyhow!("Usage: cargo run --release -- test-swap <from_asset> <to_asset> [amount]\nExample: cargo run --release -- test-swap ethereum_sepolia:wbtc base_sepolia:wbtc\nExample: cargo run --release -- test-swap solana_testnet:usdc arbitrum_sepolia:usdc 200000000")
             })?;
+            
+            // Optional custom amount (in smallest units)
+            let custom_amount = args.get(4).map(|s| s.clone());
 
-            info!("Mode: test-swap — testing single swap {} -> {}", swap_spec, to_asset);
+            if let Some(ref amt) = custom_amount {
+                info!("Mode: test-swap — testing single swap {} -> {} with custom amount {}", swap_spec, to_asset, amt);
+            } else {
+                info!("Mode: test-swap — testing single swap {} -> {}", swap_spec, to_asset);
+            }
             
             let runner = SwapRunner::new(api, db, config);
-            let result = runner.test_single_swap(swap_spec, to_asset).await?;
+            let result = runner.test_single_swap_with_amount(swap_spec, to_asset, custom_amount).await?;
 
             println!("\n═══ Swap Test Result ═══");
             println!("Pair      : {}", result.swap_pair);
