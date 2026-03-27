@@ -1,0 +1,159 @@
+    Finished `release` profile [optimized] target(s) in 1.57s
+     Running `target/release/kiosk-aggregator-cron run-once`
+DEBUG: SOLANA_PRIVATE_KEY loaded: is_some=true, len=88
+🌐 Network mode: Testnet
+[2m2026-03-27T05:32:03.213995Z[0m [32m INFO[0m Garden Swap Tester starting up
+[2m2026-03-27T05:32:03.214052Z[0m [32m INFO[0m Network mode: Testnet
+[2m2026-03-27T05:32:03.214054Z[0m [32m INFO[0m API base URL: https://testnet.api.garden.finance
+[2m2026-03-27T05:32:03.214055Z[0m [32m INFO[0m Scheduler cron: 0 0 */5 * * *
+[2m2026-03-27T05:32:03.214056Z[0m [32m INFO[0m Swap timeout: 900s
+[2m2026-03-27T05:32:03.214057Z[0m [32m INFO[0m Database: garden_swaps.db
+[2m2026-03-27T05:32:03.214057Z[0m [32m INFO[0m Balance checking: ENABLED
+[2m2026-03-27T05:32:03.218723Z[0m [32m INFO[0m Opening database: garden_swaps.db
+[2m2026-03-27T05:32:03.222739Z[0m [32m INFO[0m Database migration complete
+[2m2026-03-27T05:32:03.222758Z[0m [32m INFO[0m Mode: run-once — executing all swaps concurrently
+📋 Standard mode: 80 pairs (set ENABLE_ROUND_TRIPS=true for round-trips)
+[2m2026-03-27T05:32:03.222929Z[0m [32m INFO[0m === Starting BATCHED swap test run (80 pairs) === [3mrun_id[0m[2m=[0m777e2e8c-5909-4c46-b6ad-92c8e47c7d27
+[2m2026-03-27T05:32:03.222932Z[0m [32m INFO[0m Running swaps in batches of 10 to avoid overwhelming the system
+[2m2026-03-27T05:32:03.222933Z[0m [32m INFO[0m Checking balances for EVM chains only (fast check)...
+[2m2026-03-27T05:32:03.478329Z[0m [32m INFO[0m ETH balance: 926330981082896813 wei, required: 5000000000000000 wei, sufficient: true
+[2m2026-03-27T05:32:03.817285Z[0m [33m WARN[0m Failed to get wbtc balance: Contract call reverted with data: 0x, assuming sufficient
+[2m2026-03-27T05:32:04.099338Z[0m [33m WARN[0m Failed to get wbtc balance: Contract call reverted with data: 0x, assuming sufficient
+[2m2026-03-27T05:32:04.382046Z[0m [33m WARN[0m Failed to get wbtc balance: Contract call reverted with data: 0x, assuming sufficient
+[2m2026-03-27T05:32:04.646838Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:04.646926Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> base_sepolia:usdc (insufficient balance)
+[2m2026-03-27T05:32:04.958231Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:04.958353Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> bitcoin_testnet:btc (insufficient balance)
+[2m2026-03-27T05:32:05.339573Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:05.339651Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> bnbchain_testnet:wbtc (insufficient balance)
+[2m2026-03-27T05:32:05.657548Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:05.657626Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> citrea_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:05.943081Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:05.943202Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> monad_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:06.465992Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:06.466423Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> solana_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:06.731928Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:06.731982Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> starknet_sepolia:wbtc (insufficient balance)
+[2m2026-03-27T05:32:07.029096Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:07.029156Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> tron_shasta:usdt (insufficient balance)
+[2m2026-03-27T05:32:07.487707Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:07.487764Z[0m [32m INFO[0m ⏭️  Skipping arbitrum_sepolia:usdc -> xrpl_testnet:xrp (insufficient balance)
+[2m2026-03-27T05:32:07.670513Z[0m [32m INFO[0m WBTC balance: 0, required: 50000, sufficient: false
+[2m2026-03-27T05:32:07.670575Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:wbtc -> alpen_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:07.959950Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:07.960051Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> base_sepolia:usdc (insufficient balance)
+[2m2026-03-27T05:32:08.125716Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:08.125776Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> bitcoin_testnet:btc (insufficient balance)
+[2m2026-03-27T05:32:08.299899Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:08.299972Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> bnbchain_testnet:wbtc (insufficient balance)
+[2m2026-03-27T05:32:08.499256Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:08.499365Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> citrea_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:08.694170Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:08.694233Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> monad_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:08.869342Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:08.869424Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> solana_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:09.039289Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:09.039348Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> starknet_sepolia:wbtc (insufficient balance)
+[2m2026-03-27T05:32:09.207956Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:09.208093Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> tron_shasta:usdt (insufficient balance)
+[2m2026-03-27T05:32:09.412213Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:09.412344Z[0m [32m INFO[0m ⏭️  Skipping ethereum_sepolia:usdc -> xrpl_testnet:xrp (insufficient balance)
+[2m2026-03-27T05:32:09.792211Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:09.792318Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> bitcoin_testnet:btc (insufficient balance)
+[2m2026-03-27T05:32:10.053197Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:10.053353Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> bnbchain_testnet:wbtc (insufficient balance)
+[2m2026-03-27T05:32:10.053422Z[0m [33m WARN[0m Token address not found for cbltc: Unknown token: cbltc, assuming sufficient
+[2m2026-03-27T05:32:10.341125Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:10.341254Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> monad_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:10.660929Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:10.661058Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> solana_testnet:usdc (insufficient balance)
+[2m2026-03-27T05:32:10.931797Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:10.931864Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> starknet_sepolia:wbtc (insufficient balance)
+[2m2026-03-27T05:32:11.193753Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:11.193890Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> tron_shasta:usdt (insufficient balance)
+[2m2026-03-27T05:32:11.469161Z[0m [32m INFO[0m USDC balance: 0, required: 15000000, sufficient: false
+[2m2026-03-27T05:32:11.469207Z[0m [32m INFO[0m ⏭️  Skipping base_sepolia:usdc -> xrpl_testnet:xrp (insufficient balance)
+[2m2026-03-27T05:32:11.469244Z[0m [32m INFO[0m ✅ Balance check complete: 54/80 pairs will be attempted
+[2m2026-03-27T05:32:11.469251Z[0m [32m INFO[0m Starting batch 1/6 (10 swaps)
+[2m2026-03-27T05:32:11.469441Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_testnet:sbtc
+[2m2026-03-27T05:32:11.469455Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0malpen_signet:btc -> alpen_testnet:sbtc
+[2m2026-03-27T05:32:11.469456Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc
+[2m2026-03-27T05:32:11.469499Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol
+[2m2026-03-27T05:32:11.469520Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0malpen_signet:btc -> base_sepolia:usdc
+[2m2026-03-27T05:32:11.469525Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc
+[2m2026-03-27T05:32:11.469560Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0malpen_signet:btc -> bnbchain_testnet:wbtc
+[2m2026-03-27T05:32:11.469583Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0malpen_signet:btc -> citrea_testnet:usdc
+[2m2026-03-27T05:32:11.469866Z[0m [32m INFO[0m GET quote arbitrum_sepolia:wbtc -> alpen_testnet:sbtc (50000)
+[2m2026-03-27T05:32:11.469971Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0malpen_signet:btc -> monad_testnet:usdc
+[2m2026-03-27T05:32:11.470027Z[0m [32m INFO[0m GET quote alpen_signet:btc -> alpen_testnet:sbtc (50000)
+[2m2026-03-27T05:32:11.470102Z[0m [32m INFO[0m Starting swap [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_signet:btc
+[2m2026-03-27T05:32:11.470130Z[0m [32m INFO[0m GET quote arbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc (50000)
+[2m2026-03-27T05:32:11.470262Z[0m [32m INFO[0m GET quote ethereum_sepolia:eth -> solana_testnet:sol (5000000000000000)
+[2m2026-03-27T05:32:11.470337Z[0m [32m INFO[0m GET quote alpen_signet:btc -> base_sepolia:usdc (50000)
+[2m2026-03-27T05:32:11.470469Z[0m [32m INFO[0m GET quote alpen_signet:btc -> bitcoin_testnet:btc (50000)
+[2m2026-03-27T05:32:11.470587Z[0m [32m INFO[0m GET quote alpen_signet:btc -> bnbchain_testnet:wbtc (50000)
+[2m2026-03-27T05:32:11.470669Z[0m [32m INFO[0m GET quote alpen_signet:btc -> citrea_testnet:usdc (50000)
+[2m2026-03-27T05:32:11.470844Z[0m [32m INFO[0m GET quote alpen_signet:btc -> monad_testnet:usdc (50000)
+[2m2026-03-27T05:32:11.470927Z[0m [32m INFO[0m GET quote arbitrum_sepolia:wbtc -> alpen_signet:btc (50000)
+[2m2026-03-27T05:32:11.869586Z[0m [32m INFO[0m Quote received [3mpair[0m[2m=[0malpen_signet:btc -> alpen_testnet:sbtc [3msrc[0m[2m=[0m50000 [3mdst[0m[2m=[0m498500000000000
+[2m2026-03-27T05:32:11.869596Z[0m [32m INFO[0m Quote received [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol [3msrc[0m[2m=[0m5000000000000000 [3mdst[0m[2m=[0m119232635
+[2m2026-03-27T05:32:11.869593Z[0m [32m INFO[0m Quote received [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc [3msrc[0m[2m=[0m50000 [3mdst[0m[2m=[0m49850
+[2m2026-03-27T05:32:11.869697Z[0m [32m INFO[0m POST order alpen_signet:btc -> alpen_testnet:sbtc
+[2m2026-03-27T05:32:11.869702Z[0m [32m INFO[0m POST order arbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc
+[2m2026-03-27T05:32:11.869702Z[0m [32m INFO[0m POST order ethereum_sepolia:eth -> solana_testnet:sol
+[2m2026-03-27T05:32:11.889076Z[0m [31mERROR[0m ❌ Quote failed: Quote API 400 Bad Request - {"status":"Error","error":"No order pair found : arbitrum_sepolia:0xb5ae9785349186069c48794a763db39ec756b1cf::alpen_signet:primary"} [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_signet:btc
+[2m2026-03-27T05:32:11.889472Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_signet:btc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(0)
+[2m2026-03-27T05:32:12.164984Z[0m [31mERROR[0m ❌ Submit order failed: Submit order API 400 Bad Request - {"status":"Error","error":"Strategy unmatched : unmatched destination chain address tb1qypyl87pagnmcted8d8gnmxxps7dyqstllhhe9z: Invalid address format: EVM address must be 0x followed by 40 hex characters"} [3mpair[0m[2m=[0malpen_signet:btc -> alpen_testnet:sbtc
+[2m2026-03-27T05:32:12.165436Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0malpen_signet:btc -> alpen_testnet:sbtc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(0)
+[2m2026-03-27T05:32:12.227502Z[0m [31mERROR[0m ❌ Quote failed: Quote API 400 Bad Request - {"status":"Error","error":"No order pair found : alpen_signet:primary::base_sepolia:0x730be401ef981d199a0560c87dfddafd3ec1c493"} [3mpair[0m[2m=[0malpen_signet:btc -> base_sepolia:usdc
+[2m2026-03-27T05:32:12.227581Z[0m [31mERROR[0m ❌ Quote failed: Quote API 400 Bad Request - {"status":"Error","error":"No order pair found : alpen_signet:primary::bnbchain_testnet:0xd1e0ba2b165726b3a6051b765d4564d030fdcf50"} [3mpair[0m[2m=[0malpen_signet:btc -> bnbchain_testnet:wbtc
+[2m2026-03-27T05:32:12.227604Z[0m [31mERROR[0m ❌ Quote failed: Quote API 400 Bad Request - {"status":"Error","error":"No order pair found : alpen_signet:primary::citrea_testnet:0x730be401ef981d199a0560c87dfddafd3ec1c493"} [3mpair[0m[2m=[0malpen_signet:btc -> citrea_testnet:usdc
+[2m2026-03-27T05:32:12.227922Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0malpen_signet:btc -> base_sepolia:usdc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(0)
+[2m2026-03-27T05:32:12.228059Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0malpen_signet:btc -> bnbchain_testnet:wbtc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(0)
+[2m2026-03-27T05:32:12.228182Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0malpen_signet:btc -> citrea_testnet:usdc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(0)
+[2m2026-03-27T05:32:12.228820Z[0m [32m INFO[0m Quote received [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc [3msrc[0m[2m=[0m50000 [3mdst[0m[2m=[0m49850
+[2m2026-03-27T05:32:12.228847Z[0m [32m INFO[0m POST order alpen_signet:btc -> bitcoin_testnet:btc
+[2m2026-03-27T05:32:12.244799Z[0m [32m INFO[0m Quote received [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_testnet:sbtc [3msrc[0m[2m=[0m50000 [3mdst[0m[2m=[0m498500000000000
+[2m2026-03-27T05:32:12.244852Z[0m [32m INFO[0m POST order arbitrum_sepolia:wbtc -> alpen_testnet:sbtc
+[2m2026-03-27T05:32:12.268575Z[0m [31mERROR[0m ❌ Quote failed: Quote API 400 Bad Request - {"status":"Error","error":"No order pair found : alpen_signet:primary::monad_testnet:0x819ca7042b3e59f613dc67179b640c5b99a15c5b"} [3mpair[0m[2m=[0malpen_signet:btc -> monad_testnet:usdc
+[2m2026-03-27T05:32:12.268869Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0malpen_signet:btc -> monad_testnet:usdc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(0)
+[2m2026-03-27T05:32:12.300939Z[0m [32m INFO[0m Order submitted [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc [3morder_id[0m[2m=[0m562e4c5fe85ab5a3e9aaa916ed6ad35a97293e86b4464ec32befdf9127213886
+[2m2026-03-27T05:32:12.300983Z[0m [32m INFO[0m Order response fields: versioned_tx=false, versioned_tx_gasless=false, initiate_transaction=true, typed_data=true [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc
+[2m2026-03-27T05:32:12.301250Z[0m [32m INFO[0m Attempting EIP-712 gasless initiation for arbitrum_sepolia:wbtc
+[2m2026-03-27T05:32:12.301257Z[0m [32m INFO[0m Signing EIP-712 typed_data for gasless initiation
+[2m2026-03-27T05:32:12.301996Z[0m [32m INFO[0m EIP-712 signature generated: 0x15762fbc227746f052f9399260fbab2eaf481c4755f7abc1fdaab6451e23a6b06388089d3904804f74be327de1ba9cbe8b142971e4a94c53b623fb99a5a909851c
+[2m2026-03-27T05:32:12.302008Z[0m [32m INFO[0m Submitting EIP-712 signature for order 562e4c5fe85ab5a3e9aaa916ed6ad35a97293e86b4464ec32befdf9127213886
+[2m2026-03-27T05:32:12.302016Z[0m [32m INFO[0m PATCH initiate swap (gasless EVM) for order 562e4c5fe85ab5a3e9aaa916ed6ad35a97293e86b4464ec32befdf9127213886
+[2m2026-03-27T05:32:12.302021Z[0m [32m INFO[0m Request URL: https://testnet.api.garden.finance/v2/orders/562e4c5fe85ab5a3e9aaa916ed6ad35a97293e86b4464ec32befdf9127213886?action=initiate
+[2m2026-03-27T05:32:12.302052Z[0m [32m INFO[0m Payload: {
+  "signature": "0x15762fbc227746f052f9399260fbab2eaf481c4755f7abc1fdaab6451e23a6b06388089d3904804f74be327de1ba9cbe8b142971e4a94c53b623fb99a5a909851c"
+}
+[2m2026-03-27T05:32:12.514783Z[0m [31mERROR[0m ❌ Submit order failed: Submit order API 400 Bad Request - {"status":"Error","error":"Strategy unmatched : unmatched destination chain address tb1qypyl87pagnmcted8d8gnmxxps7dyqstllhhe9z: Invalid address format: EVM address must be 0x followed by 40 hex characters"} [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_testnet:sbtc
+[2m2026-03-27T05:32:12.515318Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> alpen_testnet:sbtc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(1)
+[2m2026-03-27T05:32:12.515694Z[0m [32m INFO[0m Order submitted [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc [3morder_id[0m[2m=[0m6b3416060202320a0caaf92bfac0ca7b213018a713e9bd5ce3f6d9ba47671bf3
+[2m2026-03-27T05:32:12.515709Z[0m [32m INFO[0m Order response fields: versioned_tx=false, versioned_tx_gasless=false, initiate_transaction=false, typed_data=false [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc
+[2m2026-03-27T05:32:12.515722Z[0m [32m INFO[0m Source initiation sent [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc [3mtx[0m[2m=[0mtb1ppxx80adtw8k24cy4lmcgvjp56crstzq55akl24hyms8svfz6963q3dukq0
+[2m2026-03-27T05:32:12.561910Z[0m [32m INFO[0m Order submitted [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol [3morder_id[0m[2m=[0m8a779e6429c56df13e1e014cff36013ae8fcc45610f8e272f8c2d891b101d8ac
+[2m2026-03-27T05:32:12.561960Z[0m [32m INFO[0m Order response fields: versioned_tx=false, versioned_tx_gasless=false, initiate_transaction=true, typed_data=false [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol
+[2m2026-03-27T05:32:12.562278Z[0m [33m WARN[0m Gasless not available (typed_data=null). Using traditional transaction broadcasting. [3masset[0m[2m=[0methereum_sepolia:eth
+[2m2026-03-27T05:32:12.562290Z[0m [32m INFO[0m Broadcasting EVM transaction via RPC
+[2m2026-03-27T05:32:12.562297Z[0m [32m INFO[0m Sending EVM transaction via RPC (non-gasless)
+[2m2026-03-27T05:32:12.562548Z[0m [32m INFO[0m Broadcasting transaction to chain_id=11155111
+[2m2026-03-27T05:32:12.697340Z[0m [32m INFO[0m Initiate response [400 Bad Request]: {"status":"Error","error":"Invalid swap request"}
+[2m2026-03-27T05:32:12.697400Z[0m [33m WARN[0m Gasless initiation failed: Initiate swap API 400 Bad Request - {"status":"Error","error":"Invalid swap request"}. Falling back to direct transaction broadcast.
+[2m2026-03-27T05:32:12.697414Z[0m [32m INFO[0m Broadcasting EVM transaction via RPC (fallback)
+[2m2026-03-27T05:32:12.697419Z[0m [32m INFO[0m Sending EVM transaction via RPC (non-gasless)
+[2m2026-03-27T05:32:12.697758Z[0m [32m INFO[0m Broadcasting transaction to chain_id=421614
+[2m2026-03-27T05:32:12.858442Z[0m [32m INFO[0m Wallet balance: 926330981082896813 wei (0.926330981082896813 ETH)
+[2m2026-03-27T05:32:12.996933Z[0m [32m INFO[0m Wallet balance: 4978903092690000 wei (0.004978903092690000 ETH)
+[2m2026-03-27T05:32:13.384285Z[0m [32m INFO[0m Transaction sent: 0xc90bc6366902cb434a3a32dfd2cd032728b0cd4eee02a7959ed1f49ce839c29d
+[2m2026-03-27T05:32:13.384344Z[0m [32m INFO[0m EVM transaction broadcasted: 0xc90bc6366902cb434a3a32dfd2cd032728b0cd4eee02a7959ed1f49ce839c29d
+[2m2026-03-27T05:32:13.384350Z[0m [32m INFO[0m Source initiation sent [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol [3mtx[0m[2m=[0m0xc90bc6366902cb434a3a32dfd2cd032728b0cd4eee02a7959ed1f49ce839c29d
+[2m2026-03-27T05:32:13.384360Z[0m [32m INFO[0m EVM initiate_transaction: {"chain_id":11155111,"data":"0x97ffc7ae000000000000000000000000d732982f3d6e3651bc9de0b879a673309d8e43b50000000000000000000000000000000000000000000000000000000000001c200000000000000000000000000000000000000000000000000011c37937e080009c5449d68824177c9071a02d889c0bea48611d75d7255848f94cb7edca733e0c","gas_limit":"0x493e0","to":"0x006caa2c35c9f4df23dbf4985616ef2a8829bf22","value":"0x11c37937e08000"} [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol
+[2m2026-03-27T05:32:14.044481Z[0m [31mERROR[0m ❌ Initiation failed: Failed to send transaction: (code: -32000, message: max fee per gas less than block base fee: address 0x55D246A6c46C4371ffcb6e18cD1D10Eca2d6F406, maxFeePerGas: 20006000, baseFee: 20010000, data: None). This usually means insufficient gas (need testnet ETH) or network issues. [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc
+[2m2026-03-27T05:32:14.045049Z[0m [32m INFO[0m ✅ Task finished [3mpair[0m[2m=[0marbitrum_sepolia:wbtc -> ethereum_sepolia:wbtc [3mstatus[0m[2m=[0mFailed [3mduration[0m[2m=[0mSome(2)
+[2m2026-03-27T05:32:27.766322Z[0m [32m INFO[0m Poll [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc [3mpoll[0m[2m=[0m1 [3msrc_init[0m[2m=[0m [3msrc_redeem[0m[2m=[0m [3mdst_init[0m[2m=[0m [3mdst_redeem[0m[2m=[0m
+[2m2026-03-27T05:32:28.628305Z[0m [32m INFO[0m Poll [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol [3mpoll[0m[2m=[0m1 [3msrc_init[0m[2m=[0m [3msrc_redeem[0m[2m=[0m [3mdst_init[0m[2m=[0m [3mdst_redeem[0m[2m=[0m
+[2m2026-03-27T05:32:43.084538Z[0m [32m INFO[0m Poll [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc [3mpoll[0m[2m=[0m2 [3msrc_init[0m[2m=[0m [3msrc_redeem[0m[2m=[0m [3mdst_init[0m[2m=[0m [3mdst_redeem[0m[2m=[0m
+[2m2026-03-27T05:32:43.857941Z[0m [32m INFO[0m Poll [3mpair[0m[2m=[0methereum_sepolia:eth -> solana_testnet:sol [3mpoll[0m[2m=[0m2 [3msrc_init[0m[2m=[0m [3msrc_redeem[0m[2m=[0m [3mdst_init[0m[2m=[0m [3mdst_redeem[0m[2m=[0m
+[2m2026-03-27T05:32:58.311844Z[0m [32m INFO[0m Poll [3mpair[0m[2m=[0malpen_signet:btc -> bitcoin_testnet:btc [3mpoll[0m[2m=[0m3 [3msrc_init[0m[2m=[0m [3msrc_redeem[0m[2m=[0m [3mdst_init[0m[2m=[0m [3mdst_redeem[0m[2m=[0m

@@ -4,6 +4,8 @@ pub mod starknet_signer;
 pub mod tron_signer;
 pub mod sui_signer;
 pub mod balance_checker;
+pub mod bitcoin_signer;
+pub mod bitcoin_provider;
 
 use crate::config::WalletConfig;
 #[derive(Debug, Clone)]

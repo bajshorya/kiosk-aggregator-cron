@@ -16,6 +16,7 @@ pub struct RpcUrlsConfig {
     pub starknet_sepolia: String,
     pub tron_shasta: String,
     pub sui_testnet: String,
+    pub bitcoin_testnet: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WalletConfig {
@@ -31,6 +32,7 @@ pub struct WalletConfig {
     pub tron_private_key: Option<String>,
     pub sui_address: String,
     pub sui_private_key: Option<String>,
+    pub bitcoin_testnet_private_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -125,6 +127,7 @@ impl AppConfig {
                     "0x79a1582388c16d0ab85904f320eb0527481391a9b9ab4b2ab46adc4c2564f9d0".to_string()
                 }),
                 sui_private_key: std::env::var("SUI_PRIVATE_KEY").ok(),
+                bitcoin_testnet_private_key: std::env::var("BITCOIN_TESTNET_PRIVATE_KEY").ok(),
             },
             scheduler: SchedulerConfig {
                 cron: std::env::var("SCHEDULER_CRON")
@@ -153,6 +156,8 @@ impl AppConfig {
                     .unwrap_or_else(|_| "https://api.shasta.trongrid.io".to_string()),
                 sui_testnet: std::env::var("RPC_SUI_TESTNET")
                     .unwrap_or_else(|_| "https://fullnode.testnet.sui.io:443".to_string()),
+                bitcoin_testnet: std::env::var("RPC_BITCOIN_TESTNET")
+                    .unwrap_or_else(|_| "https://blockstream.info/testnet/api".to_string()),
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),

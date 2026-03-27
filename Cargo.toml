@@ -34,3 +34,5 @@ hex = "0.4"
 # Sui dependencies
 ed25519-dalek = "2.1"
 sha2 = "0.10"
+# Bitcoin dependencies
+bitcoin = { version = "0.31", features = ["serde", "rand"] }

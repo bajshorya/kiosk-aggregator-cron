@@ -496,8 +496,8 @@ impl SwapRunner {
                 
                 // Check if gasless is available (typed_data present)
                 if let Some(typed_data) = &order_result.typed_data {
-                    // Use EIP-712 gasless flow
-                    info!("Using EIP-712 gasless initiation for {}", source_asset);
+                    // Try EIP-712 gasless flow first
+                    info!("Attempting EIP-712 gasless initiation for {}", source_asset);
                     
                     // Sign typed data for gasless initiation
                     let signature = signer.sign_typed_data(typed_data).await?;
@@ -505,17 +505,37 @@ impl SwapRunner {
                     let order_id = &order_result.order_id;
                     info!("Submitting EIP-712 signature for order {}", order_id);
                     
-                    self.api
-                        .initiate_swap_gasless_evm(order_id, &signature)
-                        .await?;
-
-                    info!("EVM gasless initiation submitted successfully");
-                    Ok(format!("gasless-evm-{}", order_id))
+                    // Try gasless, but fall back to direct transaction if it fails
+                    match self.api.initiate_swap_gasless_evm(order_id, &signature).await {
+                        Ok(_) => {
+                            info!("EVM gasless initiation submitted successfully");
+                            return Ok(format!("gasless-evm-{}", order_id));
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Gasless initiation failed: {}. Falling back to direct transaction broadcast.",
+                                e
+                            );
+                            
+                            // Fall through to direct transaction broadcast
+                            if let Some(tx_data) = &order_result.initiate_transaction {
+                                let rpc_url = self.rpc_url_for_chain(chain)?;
+                                info!("Broadcasting EVM transaction via RPC (fallback)");
+                                let tx_hash = signer.send_transaction(tx_data, &rpc_url).await?;
+                                info!("EVM transaction broadcasted: {}", tx_hash);
+                                return Ok(tx_hash);
+                            } else {
+                                return Err(anyhow::anyhow!(
+                                    "Gasless failed and no initiate_transaction available for fallback"
+                                ));
+                            }
+                        }
+                    }
                 } else if let Some(tx_data) = &order_result.initiate_transaction {
-                    // Fallback to traditional transaction broadcasting
+                    // No gasless available, use traditional transaction broadcasting
                     warn!(
                         asset = %source_asset,
-                        "Gasless not enabled (typed_data=null). Using traditional transaction broadcasting."
+                        "Gasless not available (typed_data=null). Using traditional transaction broadcasting."
                     );
                     
                     let rpc_url = self.rpc_url_for_chain(chain)?;
@@ -625,12 +645,150 @@ impl SwapRunner {
                 }
             }
 
-            c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => order_result
+            c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => {
+                // Check if Bitcoin private key is configured
+                let private_key_wif = self
+                    .config
+                    .wallets
+                    .bitcoin_testnet_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "BITCOIN_TESTNET_PRIVATE_KEY not set in .env. \
+                            Bitcoin swaps require manual deposit or set your WIF private key."
+                        )
+                    })?;
+
+                info!(asset = %source_asset, "Bitcoin private key found, initiating automatic transaction");
+
+                // Get deposit address from order
+                let deposit_address = order_result
+                    .to
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No deposit address in order response"))?;
+
+                // Parse amount from order response
+                let amount_sats: u64 = order_result
+                    .amount
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No amount in order response"))?
+                    .parse()
+                    .context("Failed to parse Bitcoin amount")?;
+
+                info!(
+                    "Bitcoin swap: sending {} sats to {}",
+                    amount_sats, deposit_address
+                );
+
+                // Initialize Bitcoin signer and provider
+                use crate::chains::bitcoin_signer::BitcoinSigner;
+                use crate::chains::bitcoin_provider::BitcoinProvider;
+                use bitcoin::Network;
+
+                let network = if c.contains("testnet") {
+                    Network::Testnet
+                } else {
+                    Network::Bitcoin
+                };
+
+                let signer = BitcoinSigner::new(private_key_wif.clone(), network)
+                    .context("Failed to create Bitcoin signer")?;
+
+                let provider = BitcoinProvider::new(self.config.rpc_urls.bitcoin_testnet.clone());
+
+                // Get wallet address
+                let wallet_address = signer.get_address()?;
+                info!("Bitcoin wallet address: {}", wallet_address);
+
+                // Fetch UTXOs
+                let all_utxos = provider
+                    .get_utxos(&wallet_address)
+                    .await
+                    .context("Failed to fetch Bitcoin UTXOs")?;
+
+                if all_utxos.is_empty() {
+                    anyhow::bail!("No UTXOs available for Bitcoin address {}", wallet_address);
+                }
+
+                let total_available: u64 = all_utxos.iter().map(|u| u.value).sum();
+                info!(
+                    "Found {} UTXOs with total {} sats",
+                    all_utxos.len(),
+                    total_available
+                );
+
+                // Estimate fee
+                let fee_rate = provider.estimate_fee().await.unwrap_or(2); // sats/vbyte
+                
+                // Select UTXOs - use only what we need (greedy algorithm)
+                let mut selected_utxos = Vec::new();
+                let mut selected_total: u64 = 0;
+                
+                // Sort UTXOs by value (largest first) for efficiency
+                let mut sorted_utxos = all_utxos.clone();
+                sorted_utxos.sort_by(|a, b| b.value.cmp(&a.value));
+                
+                // Estimate fee for transaction (start with 2 outputs: recipient + change)
+                let mut estimated_fee = provider.calculate_fee(1, 2, fee_rate);
+                
+                for utxo in sorted_utxos {
+                    selected_utxos.push(utxo.clone());
+                    selected_total += utxo.value;
+                    
+                    // Recalculate fee with current number of inputs
+                    estimated_fee = provider.calculate_fee(selected_utxos.len(), 2, fee_rate);
+                    
+                    // Check if we have enough
+                    if selected_total >= amount_sats + estimated_fee {
+                        break;
+                    }
+                }
+
+                info!(
+                    "Selected {} UTXOs with total {} sats (need {} sats including fee)",
+                    selected_utxos.len(),
+                    selected_total,
+                    amount_sats + estimated_fee
+                );
+                info!("Estimated fee: {} sats ({} sats/vbyte)", estimated_fee, fee_rate);
+
+                if selected_total < amount_sats + estimated_fee {
+                    anyhow::bail!(
+                        "Insufficient Bitcoin balance: have {} sats, need {} sats (amount: {}, fee: {})",
+                        selected_total,
+                        amount_sats + estimated_fee,
+                        amount_sats,
+                        estimated_fee
+                    );
+                }
+
+                // Build and sign transaction
+                info!("Building Bitcoin transaction with {} UTXOs, fee: {} sats", selected_utxos.len(), estimated_fee);
+                let tx_hex = match signer
+                    .send(deposit_address, amount_sats, selected_utxos, estimated_fee)
+                    .await
+                {
+                    Ok(hex) => hex,
+                    Err(e) => {
+                        error!("Failed to build Bitcoin transaction: {}", e);
+                        anyhow::bail!("Failed to build Bitcoin transaction: {}", e);
+                    }
+                };
+
+                // Broadcast transaction
+                let txid = provider
+                    .broadcast(&tx_hex)
+                    .await
+                    .context("Failed to broadcast Bitcoin transaction")?;
+
+                info!("Bitcoin transaction broadcasted: {}", txid);
+                Ok(txid)
+            }
+
+            _ => order_result
                 .to
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("No deposit address returned")),
-
-            _ => Err(anyhow::anyhow!("Unknown chain: {}", chain)),
         }
     }
 
