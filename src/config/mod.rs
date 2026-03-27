@@ -17,6 +17,12 @@ pub struct RpcUrlsConfig {
     pub tron_shasta: String,
     pub sui_testnet: String,
     pub bitcoin_testnet: String,
+    pub bnbchain_testnet: String,
+    pub citrea_testnet: String,
+    pub monad_testnet: String,
+    pub xrpl_testnet: String,
+    pub alpen_testnet: String,
+    pub alpen_signet: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WalletConfig {
@@ -33,6 +39,10 @@ pub struct WalletConfig {
     pub sui_address: String,
     pub sui_private_key: Option<String>,
     pub bitcoin_testnet_private_key: Option<String>,
+    pub xrpl_address: String,
+    pub xrpl_private_key: Option<String>,
+    pub alpen_address: String,
+    pub alpen_private_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -128,6 +138,12 @@ impl AppConfig {
                 }),
                 sui_private_key: std::env::var("SUI_PRIVATE_KEY").ok(),
                 bitcoin_testnet_private_key: std::env::var("BITCOIN_TESTNET_PRIVATE_KEY").ok(),
+                xrpl_address: std::env::var("WALLET_XRPL")
+                    .unwrap_or_else(|_| "rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY".to_string()),
+                xrpl_private_key: std::env::var("XRPL_PRIVATE_KEY").ok(),
+                alpen_address: std::env::var("WALLET_ALPEN")
+                    .unwrap_or_else(|_| "tb1qalpen1234567890abcdefghijklmnopqrstuvwxyz".to_string()),
+                alpen_private_key: std::env::var("ALPEN_PRIVATE_KEY").ok(),
             },
             scheduler: SchedulerConfig {
                 cron: std::env::var("SCHEDULER_CRON")
@@ -158,6 +174,18 @@ impl AppConfig {
                     .unwrap_or_else(|_| "https://fullnode.testnet.sui.io:443".to_string()),
                 bitcoin_testnet: std::env::var("RPC_BITCOIN_TESTNET")
                     .unwrap_or_else(|_| "https://blockstream.info/testnet/api".to_string()),
+                bnbchain_testnet: std::env::var("RPC_BNBCHAIN_TESTNET")
+                    .unwrap_or_else(|_| "https://data-seed-prebsc-1-s1.binance.org:8545".to_string()),
+                citrea_testnet: std::env::var("RPC_CITREA_TESTNET")
+                    .unwrap_or_else(|_| "https://rpc.testnet.citrea.xyz".to_string()),
+                monad_testnet: std::env::var("RPC_MONAD_TESTNET")
+                    .unwrap_or_else(|_| "https://testnet.monad.xyz".to_string()),
+                xrpl_testnet: std::env::var("RPC_XRPL_TESTNET")
+                    .unwrap_or_else(|_| "https://s.altnet.rippletest.net:51234".to_string()),
+                alpen_testnet: std::env::var("RPC_ALPEN_TESTNET")
+                    .unwrap_or_else(|_| "https://rpc.testnet.alpen.network".to_string()),
+                alpen_signet: std::env::var("RPC_ALPEN_SIGNET")
+                    .unwrap_or_else(|_| "https://rpc.signet.alpen.network".to_string()),
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),

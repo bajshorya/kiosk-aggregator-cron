@@ -3145,6 +3145,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "bech32 0.9.1",
  "bincode",
  "bitcoin",
  "bs58",

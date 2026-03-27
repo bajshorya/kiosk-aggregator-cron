@@ -55,6 +55,10 @@ pub struct SubmitOrderResult {
     pub versioned_tx: Option<String>,
     pub versioned_tx_gasless: Option<String>,
     pub ptb_bytes: Option<serde_json::Value>,
+    pub transaction: Option<String>,
+    pub transaction_gasless: Option<String>,
+    pub tron_transaction: Option<serde_json::Value>,
+    pub starknet_typed_data: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

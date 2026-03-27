@@ -551,10 +551,132 @@ impl SwapRunner {
                     ))
                 }
             }
-            c if c.starts_with("tron_") => Err(anyhow::anyhow!("Tron signing not yet implemented")),
+            
+            c if c.starts_with("tron_") => {
+                use crate::chains::tron_signer::TronSigner;
+                
+                // Check if private key is configured
+                info!(
+                    asset = %source_asset,
+                    "Checking Tron private key: is_some={}",
+                    self.config.wallets.tron_private_key.is_some()
+                );
+                
+                let private_key = self
+                    .config
+                    .wallets
+                    .tron_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "TRON_PRIVATE_KEY not set in .env. \
+                            Please add your Tron private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = TronSigner::new(private_key.clone())
+                    .context("Failed to create Tron signer")?;
+
+                // Check if transaction data is available
+                if let Some(transaction) = &order_result.tron_transaction {
+                    info!(
+                        asset = %source_asset,
+                        "Using tron_transaction ({} chars) - Tron signing",
+                        serde_json::to_string(transaction).unwrap_or_default().len()
+                    );
+
+                    // Sign the transaction
+                    info!(asset = %source_asset, "Signing Tron transaction...");
+                    let signature = signer
+                        .sign_transaction(transaction)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Tron signing failed");
+                            anyhow::anyhow!("Failed to sign Tron transaction: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, "Signature generated: {}", signature);
+
+                    // Submit via gasless /initiate endpoint
+                    let order_id = &order_result.order_id;
+                    info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless /initiate endpoint...");
+                    
+                    let tx_hash = self.api
+                        .initiate_swap_gasless_tron(order_id, &signature)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Gasless initiation failed");
+                            anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, order_id = %order_id, tx_hash = %tx_hash, "Gasless initiation submitted successfully");
+                    Ok(tx_hash)
+                } else {
+                    Err(anyhow::anyhow!("No tron_transaction data in response"))
+                }
+            }
 
             c if c.starts_with("starknet_") => {
-                Err(anyhow::anyhow!("Starknet signing not yet implemented"))
+                use crate::chains::starknet_signer::StarknetSigner;
+                
+                // Check if private key is configured
+                info!(
+                    asset = %source_asset,
+                    "Checking Starknet private key: is_some={}",
+                    self.config.wallets.starknet_private_key.is_some()
+                );
+                
+                let private_key = self
+                    .config
+                    .wallets
+                    .starknet_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "STARKNET_PRIVATE_KEY not set in .env. \
+                            Please add your Starknet private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = StarknetSigner::new(private_key.clone())
+                    .context("Failed to create Starknet signer")?;
+
+                // Check if starknet_typed_data is available (preferred) or fall back to typed_data
+                let typed_data = order_result.starknet_typed_data.as_ref()
+                    .or(order_result.typed_data.as_ref())
+                    .ok_or_else(|| anyhow::anyhow!("No starknet_typed_data or typed_data in response"))?;
+
+                info!(
+                    asset = %source_asset,
+                    "Using typed_data - Starknet signing"
+                );
+
+                // Sign the typed data
+                info!(asset = %source_asset, "Signing Starknet typed data...");
+                let signature = signer
+                    .sign_typed_data(typed_data)
+                    .await
+                    .map_err(|e| {
+                        error!(asset = %source_asset, error = %e, "Starknet signing failed");
+                        anyhow::anyhow!("Failed to sign Starknet typed data: {}", e)
+                    })?;
+
+                info!(asset = %source_asset, "Signature generated: {:?}", signature);
+
+                // Submit via gasless /initiate endpoint
+                let order_id = &order_result.order_id;
+                info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless /initiate endpoint...");
+                
+                let tx_hash = self.api
+                    .initiate_swap_gasless_starknet(order_id, &signature)
+                    .await
+                    .map_err(|e| {
+                        error!(asset = %source_asset, error = %e, "Gasless initiation failed");
+                        anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
+                    })?;
+
+                info!(asset = %source_asset, order_id = %order_id, tx_hash = %tx_hash, "Gasless initiation submitted successfully");
+                Ok(tx_hash)
             }
 
             c if c.starts_with("solana_") => {
@@ -642,6 +764,106 @@ impl SwapRunner {
                     Ok(tx_hash)
                 } else {
                     Err(anyhow::anyhow!("No versioned_tx or versioned_tx_gasless in Solana response"))
+                }
+            }
+
+            c if c.starts_with("sui_") => {
+                use crate::chains::sui_signer::SuiSigner;
+                
+                // Check if private key is configured
+                info!(
+                    asset = %source_asset,
+                    "Checking Sui private key: is_some={}",
+                    self.config.wallets.sui_private_key.is_some()
+                );
+                
+                let private_key = self
+                    .config
+                    .wallets
+                    .sui_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "SUI_PRIVATE_KEY not set in .env. \
+                            Please add your Sui private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = SuiSigner::new(private_key.clone())
+                    .context("Failed to create Sui signer")?;
+
+                // Check if gasless is available (transaction_gasless present)
+                if let Some(transaction_gasless) = &order_result.transaction_gasless {
+                    info!(
+                        asset = %source_asset,
+                        "Using transaction_gasless ({} chars) - GASLESS MODE",
+                        transaction_gasless.len()
+                    );
+
+                    // Sign the gasless transaction
+                    info!(asset = %source_asset, "Signing Sui gasless transaction...");
+                    let signature = signer
+                        .sign_transaction(transaction_gasless)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Sui signing failed");
+                            anyhow::anyhow!("Failed to sign Sui transaction: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, "Signature generated (base64): {} chars", signature.len());
+
+                    // Submit via gasless /initiate endpoint
+                    let order_id = &order_result.order_id;
+                    info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless /initiate endpoint...");
+                    
+                    let tx_hash = self.api
+                        .initiate_swap_gasless_sui(order_id, &signature)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Gasless initiation failed");
+                            anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, order_id = %order_id, tx_hash = %tx_hash, "Gasless initiation submitted successfully");
+                    Ok(tx_hash)
+                } else if let Some(transaction) = &order_result.transaction {
+                    // Non-gasless: execute directly via Sui RPC
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not enabled (transaction_gasless=null). Executing via Sui RPC directly."
+                    );
+                    
+                    info!(
+                        asset = %source_asset,
+                        "Using transaction ({} chars) - NON-GASLESS MODE",
+                        transaction.len()
+                    );
+
+                    let rpc_url = self.config.rpc_urls.sui_testnet.clone();
+                    info!(asset = %source_asset, "Executing via Sui RPC: {}", rpc_url);
+                    
+                    // Sign the transaction
+                    let signature = signer
+                        .sign_transaction(transaction)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Sui signing failed");
+                            anyhow::anyhow!("Failed to sign Sui transaction: {}", e)
+                        })?;
+                    
+                    // Execute via RPC
+                    let tx_hash = signer
+                        .execute_transaction(transaction, &signature, &rpc_url)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Sui execution failed");
+                            anyhow::anyhow!("Failed to execute Sui transaction: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, "Sui transaction executed: {}", tx_hash);
+                    Ok(tx_hash)
+                } else {
+                    Err(anyhow::anyhow!("No transaction or transaction_gasless in Sui response"))
                 }
             }
 

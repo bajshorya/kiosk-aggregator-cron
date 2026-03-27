@@ -5,7 +5,7 @@ use solana_client::{
     rpc_config::RpcSendTransactionConfig,
 };
 use solana_sdk::{
-    signature::Keypair,
+    signature::{Keypair, Signer},
     transaction::VersionedTransaction,
 };
 use tracing::info;
@@ -50,26 +50,55 @@ impl SolanaSigner {
             .decode(versioned_tx_base64)
             .context("Failed to decode base64 transaction")?;
 
+        info!("Decoded transaction bytes, length: {}", tx_bytes.len());
+
         // Deserialize into VersionedTransaction
-        let tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
+        let mut tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
             .context("Failed to deserialize Solana transaction")?;
 
         info!("Solana transaction decoded, signing with our keypair...");
+        info!("Transaction has {} existing signatures", tx.signatures.len());
+        info!("Message requires {} signatures", tx.message.header().num_required_signatures);
 
-        // Sign the transaction with our keypair
+        // Get the account keys to find our signer index
+        let account_keys = tx.message.static_account_keys();
+        let our_pubkey = self.keypair.pubkey();
+        
+        info!("Our pubkey: {}", our_pubkey);
+        info!("Account keys: {:?}", account_keys.iter().take(3).collect::<Vec<_>>());
+        
+        // Find which index we should sign at
+        let our_index = account_keys.iter().position(|key| key == &our_pubkey)
+            .context("Our public key not found in transaction account keys")?;
+        
+        info!("Our signer index: {}", our_index);
+
+        // For gasless transactions, the transaction might already be partially signed
+        // We need to add our signature at the correct index
         let message = tx.message.clone();
-        let signed_tx = VersionedTransaction::try_new(message, &[&self.keypair])
-            .context("Failed to sign Solana transaction")?;
+        
+        // Create a new signature for this transaction
+        let signature = self.keypair.try_sign_message(message.serialize().as_slice())
+            .context("Failed to create signature")?;
 
-        info!(
-            "Transaction signed, signature: {}",
-            signed_tx.signatures[0]
-        );
+        info!("Created signature: {}", signature);
+
+        // Ensure we have enough signature slots
+        while tx.signatures.len() <= our_index {
+            tx.signatures.push(solana_sdk::signature::Signature::default());
+        }
+        
+        // Place our signature at the correct index
+        tx.signatures[our_index] = signature;
+
+        info!("Transaction now has {} signatures", tx.signatures.len());
 
         // Serialize the signed transaction back to base64
-        let signed_bytes = bincode::serialize(&signed_tx)
+        let signed_bytes = bincode::serialize(&tx)
             .context("Failed to serialize signed transaction")?;
         let signed_base64 = STANDARD.encode(&signed_bytes);
+
+        info!("Signed transaction serialized, base64 length: {}", signed_base64.len());
 
         Ok(signed_base64)
     }

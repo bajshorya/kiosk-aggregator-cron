@@ -13,12 +13,16 @@ pub struct SuiSigner {
 #[allow(dead_code)]
 impl SuiSigner {
     pub fn new(private_key: String) -> Result<Self> {
-        // Remove 0x prefix if present
-        let key_str = private_key.trim_start_matches("0x");
-        
-        // Decode private key (should be 32 bytes for Ed25519)
-        let key_bytes = hex::decode(key_str)
-            .context("Failed to decode Sui private key hex")?;
+        let key_bytes = if private_key.starts_with("suiprivkey1") {
+            // Bech32-encoded Sui private key
+            info!("Decoding Bech32-encoded Sui private key");
+            Self::decode_bech32_key(&private_key)?
+        } else {
+            // Hex-encoded private key
+            let key_str = private_key.trim_start_matches("0x");
+            hex::decode(key_str)
+                .context("Failed to decode Sui private key hex")?
+        };
         
         if key_bytes.len() != 32 {
             return Err(anyhow::anyhow!(
@@ -33,6 +37,26 @@ impl SuiSigner {
         let signing_key = SigningKey::from_bytes(&key_array);
         
         Ok(Self { signing_key })
+    }
+
+    /// Decode Bech32-encoded Sui private key (format: suiprivkey1...)
+    fn decode_bech32_key(encoded: &str) -> Result<Vec<u8>> {
+        use bech32::FromBase32;
+        
+        let (hrp, data, _variant) = bech32::decode(encoded)
+            .context("Failed to decode Bech32 Sui private key")?;
+        
+        if hrp != "suiprivkey" {
+            return Err(anyhow::anyhow!(
+                "Invalid Sui private key HRP: expected 'suiprivkey', got '{}'",
+                hrp
+            ));
+        }
+        
+        let bytes = Vec::<u8>::from_base32(&data)
+            .context("Failed to convert Bech32 data to bytes")?;
+        
+        Ok(bytes)
     }
 
     /// Sign Sui PTB (Programmable Transaction Block) for gasless initiation
