@@ -1,77 +1,54 @@
 # Litecoin Support Removal
 
-## Summary
-
+## Overview
 All Litecoin references have been removed from the codebase because Garden Finance does not support Litecoin on testnet yet.
 
 ## Changes Made
 
-### 1. Configuration (`src/config/mod.rs`)
-- Removed `litecoin_testnet_address` field from `WalletConfig` struct
-- Removed Litecoin address loading from environment variables
+### 1. Swap Pairs (`src/chains/mod.rs`)
+- Removed all Litecoin swap pairs from `all_swap_pairs()` function
+- Updated `requires_manual_deposit()` to include `alpen_signet` (Bitcoin-style chain)
+- Removed unused `_sui` variable
 
-### 2. Chain Logic (`src/chains/mod.rs`)
-- Removed `_ltc` variable from `all_swap_pairs()` function
-- Updated `requires_manual_deposit()` to only check for Bitcoin (removed Litecoin check)
+### 2. Swap Runner (`src/scheduler/runner.rs`)
+- Updated Bitcoin swap dispatch logic to only check for `bitcoin_` prefix (removed `litecoin_` check)
+- Fixed `alpen_testnet` matching to use prefix match instead of exact match
+- Bitcoin swaps run sequentially with UTXO reuse, Litecoin no longer included
 
-### 3. Swap Runner (`src/scheduler/runner.rs`)
-- Updated Bitcoin swap partitioning logic to only check for `bitcoin_` prefix (removed `litecoin_` check)
-- Bitcoin swaps now run sequentially with UTXO reuse, Litecoin no longer included
-
-### 4. Environment Files
-- **`.env`**: Removed `WALLET_LITECOIN_TESTNET` variable and commented-out reference
+### 3. Environment Files
+- **`.env`**: Commented out Sui wallet configuration (not currently used)
 - **`.env.example`**: Removed Litecoin wallet address configuration section
 
-### 5. Documentation (`README.md`)
-- Removed Litecoin from supported chains table
-- Updated feature list to remove Litecoin references
-- Removed "Bitcoin/Litecoin Swaps" section from manual deposits
-- Updated cost optimization section to remove Litecoin costs
-- Updated automated execution documentation
+### 4. Configuration (`src/config/mod.rs`)
+- No changes needed - `WalletConfig` struct doesn't have `litecoin_testnet_address` field
 
-## Impact
+## Testing
+After removal, the system supports:
+- Bitcoin Testnet (with automatic UTXO reuse)
+- Alpen Signet (Bitcoin-style, manual deposit)
+- All EVM chains (Ethereum, Base, Arbitrum, Alpen, BNB, Citrea, Monad, XRPL)
+- Solana Testnet
+- Starknet Sepolia
+- Tron Shasta
 
-### Before Removal
-- 80+ swap pairs including Litecoin routes
-- Litecoin wallet configuration required
-- Manual deposit handling for Litecoin swaps
+## Future Restoration
+If Garden Finance adds Litecoin support to testnet in the future, the following would need to be added:
 
-### After Removal
-- 80 swap pairs (Litecoin routes removed)
-- No Litecoin wallet configuration needed
-- Cleaner codebase focused on supported chains
-
-## Supported Chains (After Removal)
-
-1. **Bitcoin Testnet** - Fully automated with UTXO reuse
-2. **Ethereum Sepolia** - EVM with gasless support
-3. **Base Sepolia** - EVM with gasless support
-4. **Arbitrum Sepolia** - EVM with gasless support
-5. **Alpen Testnet** - EVM chain
-6. **BNB Chain Testnet** - EVM chain
-7. **Citrea Testnet** - EVM chain
-8. **Monad Testnet** - EVM chain
-9. **XRPL Testnet** - EVM-compatible
-10. **Solana Testnet** - Versioned transactions with gasless
-11. **Starknet Sepolia** - Typed data signing
-12. **Tron Shasta** - EVM-compatible
-
-## Future Considerations
-
-If Garden Finance adds Litecoin support to testnet in the future, the following would need to be restored:
-
-1. Add `litecoin_testnet_address` back to `WalletConfig`
-2. Add Litecoin swap pairs to `all_swap_pairs()`
-3. Update `requires_manual_deposit()` to include Litecoin
-4. Add Litecoin to sequential execution logic (similar to Bitcoin)
-5. Update documentation and environment files
+1. Add Litecoin swap pairs to `all_swap_pairs()` in `src/chains/mod.rs`
+2. Update `requires_manual_deposit()` to include Litecoin if it requires manual deposits
+3. Add Litecoin dispatch logic to `dispatch_initiation()` in `src/scheduler/runner.rs`
+4. Add `WALLET_LITECOIN_TESTNET` to `.env` and `.env.example`
+5. Optionally add `litecoin_testnet_address` to `WalletConfig` struct
 
 ## Verification
-
-Build completed successfully after removal:
+Run the following to verify the changes:
 ```bash
-cargo build --release
-# Finished `release` profile [optimized] target(s) in 16.86s
-```
+# Check for any remaining Litecoin references
+grep -r "litecoin" src/
 
-All Litecoin references have been cleanly removed without breaking existing functionality.
+# Build the project
+cargo build --release
+
+# Test a swap
+cargo run --release -- test-swap ethereum_sepolia:eth solana_testnet:sol
+```

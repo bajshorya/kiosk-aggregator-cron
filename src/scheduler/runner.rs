@@ -548,7 +548,7 @@ impl SwapRunner {
             c if c.starts_with("ethereum_")
                 || c.starts_with("base_")
                 || c.starts_with("arbitrum_")
-                || c.starts_with("alpen_testnet")
+                || c.starts_with("alpen_")
                 || c.starts_with("bnbchain_")
                 || c.starts_with("citrea_")
                 || c.starts_with("monad_")
@@ -830,7 +830,7 @@ impl SwapRunner {
                 }
             }
 
-            c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => {
+            c if c.starts_with("bitcoin_") => {
                 // Check if Bitcoin private key is configured
                 let private_key_wif = self
                     .config
