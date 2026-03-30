@@ -187,39 +187,66 @@ impl SwapRunner {
 
         let total = bitcoin_pairs.len() + other_pairs.len();
         
+        // Batch configuration
+        const BATCH_SIZE: usize = 10;
+        const BATCH_DELAY_SECS: u64 = 2;
+        
         if !bitcoin_pairs.is_empty() {
             info!(
                 "⚠️  Bitcoin UTXO conflict prevention: {} Bitcoin swaps will run SEQUENTIALLY (5s delay between each)",
                 bitcoin_pairs.len()
             );
-            info!(
-                "✅ {} non-Bitcoin swaps will run CONCURRENTLY",
-                other_pairs.len()
-            );
-        } else {
-            info!("Spawning ALL {} swaps concurrently (no Bitcoin swaps)", total);
         }
+        
+        let batch_count = (other_pairs.len() + BATCH_SIZE - 1) / BATCH_SIZE;
+        info!(
+            "📦 Batch processing: {} non-Bitcoin swaps in {} batches of {} ({}s delay between batches)",
+            other_pairs.len(),
+            batch_count,
+            BATCH_SIZE,
+            BATCH_DELAY_SECS
+        );
         
         let mut set: JoinSet<SwapRecord> = JoinSet::new();
 
-        // Spawn non-Bitcoin swaps concurrently
-        for pair in other_pairs {
-            let api = Arc::clone(&self.api);
-            let db = Arc::clone(&self.db);
-            let config = self.config.clone();
-            let run_id_c = run_id.clone();
-            let pair_c = pair.clone();
+        // Process non-Bitcoin swaps in batches
+        for (batch_idx, batch) in other_pairs.chunks(BATCH_SIZE).enumerate() {
+            if batch_idx > 0 {
+                info!(
+                    "⏱️  Waiting {}s before batch {}/{}...",
+                    BATCH_DELAY_SECS,
+                    batch_idx + 1,
+                    batch_count
+                );
+                tokio::time::sleep(tokio::time::Duration::from_secs(BATCH_DELAY_SECS)).await;
+            }
+            
+            info!(
+                "🚀 Starting batch {}/{}: {} swaps",
+                batch_idx + 1,
+                batch_count,
+                batch.len()
+            );
+            
+            // Spawn all swaps in this batch concurrently
+            for pair in batch {
+                let api = Arc::clone(&self.api);
+                let db = Arc::clone(&self.db);
+                let config = self.config.clone();
+                let run_id_c = run_id.clone();
+                let pair_c = pair.clone();
 
-            let evm_lock = Arc::clone(&self.evm_lock);
-            set.spawn(async move {
-                let runner = SwapRunner {
-                    api,
-                    db,
-                    config,
-                    evm_lock,
-                };
-                runner.run_single_swap(&run_id_c, &pair_c).await
-            });
+                let evm_lock = Arc::clone(&self.evm_lock);
+                set.spawn(async move {
+                    let runner = SwapRunner {
+                        api,
+                        db,
+                        config,
+                        evm_lock,
+                    };
+                    runner.run_single_swap(&run_id_c, &pair_c).await
+                });
+            }
         }
 
         // Spawn Bitcoin swaps SEQUENTIALLY with delays
