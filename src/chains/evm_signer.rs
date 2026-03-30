@@ -21,6 +21,9 @@ impl EvmSigner {
     pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<String> {
         info!("Signing EIP-712 typed_data for gasless initiation");
         
+        // Log the typed_data structure for debugging
+        info!("Typed data to sign: {}", serde_json::to_string_pretty(typed_data).unwrap_or_default());
+        
         // Parse the typed_data JSON into ethers TypedData struct
         let typed: TypedData = serde_json::from_value(typed_data.clone())
             .context("Failed to parse typed_data as EIP-712")?;

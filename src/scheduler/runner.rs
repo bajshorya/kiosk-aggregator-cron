@@ -583,22 +583,13 @@ impl SwapRunner {
             {
                 let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
                 
-                // Check if approval transaction is needed (for ERC20 tokens)
-                if let Some(approval_tx) = &order_result.approval_transaction {
-                    info!("Approval transaction required for ERC20 token");
-                    let rpc_url = self.rpc_url_for_chain(chain)?;
-                    
-                    info!("Executing approval transaction via RPC");
-                    let approval_hash = signer.send_transaction(approval_tx, &rpc_url).await?;
-                    info!("Approval transaction sent: {}", approval_hash);
-                    
-                    // Wait a bit for approval to be mined
-                    info!("Waiting 10s for approval transaction to be mined...");
-                    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-                }
-                
                 // Check if gasless is available (typed_data present)
                 if let Some(typed_data) = &order_result.typed_data {
+                    // When using gasless, skip approval transaction
+                    // Garden's relayer will handle approvals
+                    if order_result.approval_transaction.is_some() {
+                        info!("Approval transaction needed but skipping (gasless mode - Garden handles it)");
+                    }
                     // Try EIP-712 gasless flow first
                     info!("Attempting EIP-712 gasless initiation for {}", source_asset);
                     
@@ -640,6 +631,20 @@ impl SwapRunner {
                         asset = %source_asset,
                         "Gasless not available (typed_data=null). Using traditional transaction broadcasting."
                     );
+                    
+                    // Execute approval transaction if needed (non-gasless mode)
+                    if let Some(approval_tx) = &order_result.approval_transaction {
+                        info!("Approval transaction required for ERC20 token");
+                        let rpc_url = self.rpc_url_for_chain(chain)?;
+                        
+                        info!("Executing approval transaction via RPC");
+                        let approval_hash = signer.send_transaction(approval_tx, &rpc_url).await?;
+                        info!("Approval transaction sent: {}", approval_hash);
+                        
+                        // Wait a bit for approval to be mined
+                        info!("Waiting 10s for approval transaction to be mined...");
+                        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                    }
                     
                     let rpc_url = self.rpc_url_for_chain(chain)?;
                     

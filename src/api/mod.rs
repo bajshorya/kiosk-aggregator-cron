@@ -296,11 +296,13 @@ impl GardenApiClient {
         info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
 
         let (hk, hv) = self.app_id_header();
+        let (kiosk_k, kiosk_v) = self.kiosk_header();
         
         let resp = self
             .client
             .patch(&url)
             .header(hk, &hv)
+            .header(kiosk_k, kiosk_v)
             .header("content-type", "application/json")
             .json(&payload)
             .send()
@@ -348,11 +350,13 @@ impl GardenApiClient {
         });
 
         let (hk, hv) = self.app_id_header();
+        let (kiosk_k, kiosk_v) = self.kiosk_header();
         
         let mut req = self
             .client
             .patch(&url)
             .header(hk, &hv)
+            .header(kiosk_k, kiosk_v)
             .header("content-type", "application/json");
         
         // Add Authorization header if we have a token
@@ -416,11 +420,13 @@ impl GardenApiClient {
         info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
 
         let (hk, hv) = self.app_id_header();
+        let (kiosk_k, kiosk_v) = self.kiosk_header();
         
         let resp = self
             .client
             .patch(&url)
             .header(hk, &hv)
+            .header(kiosk_k, kiosk_v)
             .header("content-type", "application/json")
             .json(&payload)
             .send()
@@ -470,11 +476,13 @@ impl GardenApiClient {
         info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
 
         let (hk, hv) = self.app_id_header();
+        let (kiosk_k, kiosk_v) = self.kiosk_header();
         
         let resp = self
             .client
             .patch(&url)
             .header(hk, &hv)
+            .header(kiosk_k, kiosk_v)
             .header("content-type", "application/json")
             .json(&payload)
             .send()

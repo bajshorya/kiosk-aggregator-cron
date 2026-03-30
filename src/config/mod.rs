@@ -174,10 +174,15 @@ impl AppConfig {
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),
             network_mode,
-            enable_balance_check: std::env::var("ENABLE_BALANCE_CHECK")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(true), // Default to true
+            enable_balance_check: {
+                let env_val = std::env::var("ENABLE_BALANCE_CHECK").ok();
+                eprintln!("DEBUG: ENABLE_BALANCE_CHECK env value: {:?}", env_val);
+                let result = env_val
+                    .map(|v| v.to_lowercase() != "false")
+                    .unwrap_or(true);
+                eprintln!("DEBUG: enable_balance_check result: {}", result);
+                result
+            },
         })
     }
 

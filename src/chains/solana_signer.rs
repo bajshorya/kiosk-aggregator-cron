@@ -51,23 +51,49 @@ impl SolanaSigner {
             .context("Failed to decode base64 transaction")?;
 
         // Deserialize into VersionedTransaction
-        let tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
+        let mut tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
             .context("Failed to deserialize Solana transaction")?;
 
         info!("Solana transaction decoded, signing with our keypair...");
+        info!("Transaction has {} existing signatures", tx.signatures.len());
+        info!("Message requires {} signatures", tx.message.header().num_required_signatures);
 
-        // Sign the transaction with our keypair
-        let message = tx.message.clone();
-        let signed_tx = VersionedTransaction::try_new(message, &[&self.keypair])
-            .context("Failed to sign Solana transaction")?;
-
-        info!(
-            "Transaction signed, signature: {}",
-            signed_tx.signatures[0]
-        );
+        // For gasless transactions, Garden provides a partially signed transaction
+        // We need to add our signature to the existing signatures
+        use solana_sdk::signature::Signer;
+        
+        // Sign the message
+        let signature = self.keypair.sign_message(tx.message.serialize().as_slice());
+        
+        info!("Generated signature: {}", signature);
+        
+        // Find our pubkey position in the account keys
+        let our_pubkey = self.keypair.pubkey();
+        let account_keys = tx.message.static_account_keys();
+        
+        let our_position = account_keys
+            .iter()
+            .position(|key| key == &our_pubkey)
+            .context("Our pubkey not found in transaction account keys")?;
+        
+        info!("Our pubkey {} is at position {}", our_pubkey, our_position);
+        
+        // Ensure we have enough signature slots
+        if our_position >= tx.signatures.len() {
+            anyhow::bail!(
+                "Signature position {} exceeds available slots {}",
+                our_position,
+                tx.signatures.len()
+            );
+        }
+        
+        // Replace the placeholder signature at our position
+        tx.signatures[our_position] = signature;
+        
+        info!("Transaction signed, signature placed at position {}", our_position);
 
         // Serialize the signed transaction back to base64
-        let signed_bytes = bincode::serialize(&signed_tx)
+        let signed_bytes = bincode::serialize(&tx)
             .context("Failed to serialize signed transaction")?;
         let signed_base64 = STANDARD.encode(&signed_bytes);
 
