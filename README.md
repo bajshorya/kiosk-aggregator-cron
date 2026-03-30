@@ -5,7 +5,7 @@ A comprehensive testing tool for the [Garden Finance](https://garden.finance) cr
 ## Features
 
 - ✅ **Concurrent Swap Execution** - All swaps run simultaneously for maximum efficiency
-- ✅ **16 Swap Pairs** - Tests Bitcoin, Litecoin, EVM, Solana, Starknet, and Tron
+- ✅ **Multiple Chains** - Tests Bitcoin, EVM chains, Solana, Starknet, and Tron
 - ✅ **Real-time Database Tracking** - SQLite with WAL mode for concurrent access
 - ✅ **Chain-Specific Handling** - Automatic detection of deposit requirements
 - ✅ **Comprehensive Logging** - Detailed progress tracking with transaction hashes
@@ -16,14 +16,18 @@ A comprehensive testing tool for the [Garden Finance](https://garden.finance) cr
 
 | Chain | Asset | Type | Notes |
 |-------|-------|------|-------|
-| Bitcoin Testnet | BTC | UTXO | Requires manual deposit |
-| Litecoin Testnet | LTC | UTXO | Requires manual deposit |
-| Ethereum Sepolia | WBTC | EVM | Automatic execution |
-| Base Sepolia | WBTC | EVM | Automatic execution |
-| Arbitrum Sepolia | WBTC | EVM | Automatic execution |
-| Solana Testnet | SOL | Solana | Versioned transactions |
+| Bitcoin Testnet | BTC | UTXO | Automatic execution with private key |
+| Ethereum Sepolia | ETH, WBTC, USDC | EVM | Automatic execution |
+| Base Sepolia | WBTC, USDC | EVM | Automatic execution |
+| Arbitrum Sepolia | WBTC, USDC | EVM | Automatic execution |
+| Alpen Testnet | sBTC, USDC | EVM | Automatic execution |
+| BNB Chain Testnet | WBTC | EVM | Automatic execution |
+| Citrea Testnet | USDC | EVM | Automatic execution |
+| Monad Testnet | USDC | EVM | Automatic execution |
+| XRPL Testnet | XRP | EVM | Automatic execution |
+| Solana Testnet | SOL, USDC | Solana | Versioned transactions |
 | Starknet Sepolia | WBTC | Starknet | Typed data signing |
-| Tron Shasta | WBTC | Tron | EVM-compatible |
+| Tron Shasta | USDT, WBTC | Tron | EVM-compatible |
 
 ## Installation
 
@@ -51,7 +55,6 @@ GARDEN_APP_ID=your_app_id_here
 
 # Wallet Addresses (Testnet)
 WALLET_BITCOIN_TESTNET=tb1q...
-WALLET_LITECOIN_TESTNET=tltc1q...
 WALLET_EVM=0x...
 WALLET_STARKNET=0x...
 WALLET_SOLANA=...
@@ -172,30 +175,34 @@ All swaps use the Garden API minimum amounts:
 | LTC | 1,000,000 sats | ~$50 |
 | SOL | 350,000,000 lamports | ~$50 |
 
-## Manual Deposits
+## Automated Execution
 
-Some chains require manual deposits:
+All swaps are now fully automated when you configure the appropriate private keys in your `.env` file:
 
-### Bitcoin/Litecoin Swaps
+### Bitcoin Swaps
 
-When you see:
-```
-⚠️ [DEPOSIT NEEDED] Send 50000 bitcoin_testnet:btc to tb1p...
-```
+Bitcoin swaps are fully automated when you set `BITCOIN_TESTNET_PRIVATE_KEY` in your `.env` file. The system will:
+1. Automatically fetch available UTXOs from your wallet
+2. Select the optimal UTXOs for the transaction
+3. Build and sign the transaction
+4. Broadcast it to the Bitcoin network
 
-You need to:
-1. Copy the deposit address
-2. Send the exact amount from your wallet
-3. Wait for confirmations
-4. The swap will automatically detect the deposit and continue
+No manual deposits required!
 
-### EVM Swaps (Testnet)
+### EVM Swaps
 
-EVM swaps may require wallet interaction:
-1. Connect MetaMask to the testnet
-2. Approve pending transactions
-3. Sign the initiate transaction
-4. Wait for confirmations
+EVM swaps are automatic with your `WALLET_EVM_PRIVATE_KEY`. The system handles:
+1. Transaction signing
+2. Gas estimation
+3. Broadcasting to the network
+4. Gasless transactions when available
+
+### Solana Swaps
+
+Solana swaps are automatic with your `SOLANA_PRIVATE_KEY`. The system supports:
+1. Versioned transactions
+2. Gasless transactions when available
+3. Automatic signing and broadcasting
 
 ## Database
 
@@ -336,14 +343,13 @@ cargo test
 
 The swap pairs are ordered to minimize spending:
 
-1. **EVM swaps first** (6 swaps) - No manual deposits, can reuse received funds
-2. **Bitcoin deposits** (3 swaps) - $150 total
-3. **Litecoin deposit** (1 swap) - $50
-4. **Solana** (2 swaps) - $100
-5. **Starknet** (2 swaps) - $100
-6. **Tron** (2 swaps) - $100
+1. **EVM swaps** - Automatic execution, can reuse received funds
+2. **Bitcoin swaps** - Automatic with UTXO reuse for continuous testing
+3. **Solana swaps** - Automatic with gasless support
+4. **Starknet swaps** - Automatic with typed data signing
+5. **Tron swaps** - Automatic execution
 
-**Total Cost:** ~$550 USD (testnet)
+All swaps use testnet tokens with minimal amounts for testing.
 
 ## Documentation
 

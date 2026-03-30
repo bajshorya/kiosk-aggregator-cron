@@ -21,6 +21,7 @@ struct BlockstreamStatus {
 pub struct BitcoinProvider {
     client: Client,
     base_url: String,
+    fallback_url: Option<String>,
 }
 
 impl BitcoinProvider {
@@ -30,32 +31,89 @@ impl BitcoinProvider {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .unwrap_or_else(|_| Client::new());
+        
+        // Set fallback URL for Testnet4 if primary is mempool.space
+        let fallback_url = if base_url.contains("mempool.space/testnet4") {
+            Some("https://mempool.space/testnet4/api".to_string())
+        } else {
+            None
+        };
             
         Self {
             client,
             base_url,
+            fallback_url,
         }
     }
 
-    /// Get UTXOs for an address
+    /// Get UTXOs for an address with retry and timeout handling
     pub async fn get_utxos(&self, address: &str) -> Result<Vec<BitcoinUTXO>> {
-        let url = format!("{}/address/{}/utxo", self.base_url, address);
-        info!("Fetching UTXOs from: {}", url);
+        // Try primary URL first, then fallback if available
+        let urls = if let Some(ref fallback) = self.fallback_url {
+            vec![self.base_url.clone(), fallback.clone()]
+        } else {
+            vec![self.base_url.clone()]
+        };
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context(format!("Failed to fetch UTXOs from {}", url))?;
+        for (url_idx, base) in urls.iter().enumerate() {
+            let url = format!("{}/address/{}/utxo", base, address);
+            if url_idx > 0 {
+                info!("Trying fallback URL: {}", url);
+            } else {
+                info!("Fetching UTXOs from: {}", url);
+            }
 
-        let status = response.status();
-        info!("UTXO API response status: {}", status);
+            // Try with a shorter timeout (10 seconds) and retry 2 times per URL
+            for attempt in 1..=2 {
+                let result = tokio::time::timeout(
+                    std::time::Duration::from_secs(10),
+                    self.client.get(&url).send()
+                ).await;
 
-        if !status.is_success() {
-            anyhow::bail!("Failed to fetch UTXOs: HTTP {}", status);
+                match result {
+                    Ok(Ok(response)) => {
+                        let status = response.status();
+                        info!("UTXO API response status: {} (attempt {})", status, attempt);
+
+                        if !status.is_success() {
+                            if attempt < 2 {
+                                warn!("UTXO fetch failed with HTTP {}, retrying...", status);
+                                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                                continue;
+                            }
+                            anyhow::bail!("Failed to fetch UTXOs: HTTP {}", status);
+                        }
+
+                        return self.parse_utxos_response(response, address).await;
+                    }
+                    Ok(Err(e)) => {
+                        warn!("UTXO fetch error (attempt {}): {}", attempt, e);
+                        if attempt < 2 {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                            continue;
+                        }
+                        anyhow::bail!("Failed to fetch UTXOs after {} attempts: {}", attempt, e);
+                    }
+                    Err(_) => {
+                        warn!("UTXO fetch timed out after 10s (attempt {})", attempt);
+                        if attempt < 2 {
+                            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                            continue;
+                        }
+                        // Don't bail yet, try next URL if available
+                        if url_idx < urls.len() - 1 {
+                            warn!("Primary URL failed, trying fallback...");
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
+        anyhow::bail!("Failed to fetch UTXOs from all available endpoints")
+    }
+
+    async fn parse_utxos_response(&self, response: reqwest::Response, address: &str) -> Result<Vec<BitcoinUTXO>> {
         let utxos: Vec<BlockstreamUTXO> = response
             .json()
             .await
@@ -76,6 +134,7 @@ impl BitcoinProvider {
                     vout: u.vout,
                     value: u.value,
                     script_pubkey: String::new(), // Not needed for our use case
+                    confirmed: u.status.confirmed,
                 }
             })
             .collect();

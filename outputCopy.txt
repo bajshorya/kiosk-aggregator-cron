@@ -1,0 +1,3836 @@
+File: src/config/mod.rs
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GardenConfig {
+    pub api_base_url: String,
+    pub app_id: String,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RpcUrlsConfig {
+    pub ethereum_sepolia: String,
+    pub base_sepolia: String,
+    pub arbitrum_sepolia: String,
+    pub solana_testnet: String,
+    pub starknet_sepolia: String,
+    pub tron_shasta: String,
+    pub sui_testnet: String,
+    pub bitcoin_testnet: String,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WalletConfig {
+    pub bitcoin_testnet_address: String,
+    pub litecoin_testnet_address: String,
+    pub evm_address: String,
+    pub evm_private_key: String,
+    pub starknet_address: String,
+    pub starknet_private_key: Option<String>,
+    pub solana_address: String,
+    pub solana_private_key: Option<String>,
+    pub tron_address: String,
+    pub tron_private_key: Option<String>,
+    pub sui_address: String,
+    pub sui_private_key: Option<String>,
+    pub bitcoin_testnet_private_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SchedulerConfig {
+    pub cron: String,
+    pub swap_timeout_secs: u64,
+    pub poll_interval_secs: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkMode {
+    Testnet,
+    Mainnet,
+}
+
+impl Default for NetworkMode {
+    fn default() -> Self {
+        NetworkMode::Testnet
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AppConfig {
+    pub garden: GardenConfig,
+    pub wallets: WalletConfig,
+    pub scheduler: SchedulerConfig,
+    pub database_url: String,
+    pub rpc_urls: RpcUrlsConfig,
+    pub network_mode: NetworkMode,
+    pub enable_balance_check: bool,
+}
+
+impl AppConfig {
+    pub fn from_env() -> Result<Self> {
+        dotenv::dotenv().ok();
+        
+        // Debug: Check if SOLANA_PRIVATE_KEY is in environment
+        let solana_key = std::env::var("SOLANA_PRIVATE_KEY").ok();
+        eprintln!("DEBUG: SOLANA_PRIVATE_KEY loaded: is_some={}, len={}", 
+            solana_key.is_some(),
+            solana_key.as_ref().map(|s| s.len()).unwrap_or(0)
+        );
+        
+        let network_mode = std::env::var("NETWORK_MODE")
+            .unwrap_or_else(|_| "testnet".to_string())
+            .to_lowercase();
+        
+        let network_mode = match network_mode.as_str() {
+            "mainnet" => NetworkMode::Mainnet,
+            _ => NetworkMode::Testnet,
+        };
+
+        eprintln!("🌐 Network mode: {:?}", network_mode);
+        
+        Ok(AppConfig {
+            garden: GardenConfig {
+                api_base_url: std::env::var("GARDEN_API_BASE_URL")
+                    .unwrap_or_else(|_| {
+                        match network_mode {
+                            NetworkMode::Mainnet => "https://api.garden.finance".to_string(),
+                            NetworkMode::Testnet => "https://testnet.api.garden.finance".to_string(),
+                        }
+                    }),
+                app_id: std::env::var("GARDEN_APP_ID").unwrap_or_else(|_| {
+                    "f242ea49332293424c96c562a6ef575a819908c878134dcb4fce424dc84ec796".to_string()
+                }),
+            },
+            wallets: WalletConfig {
+                bitcoin_testnet_address: std::env::var("WALLET_BITCOIN_TESTNET").unwrap_or_else(
+                    |_| {
+                        "tb1p4pr78swsn60y4ushe05v28mqpqppxxkfkxu2wun5jw6duc8unj3sjrh4gd".to_string()
+                    },
+                ),
+                evm_private_key: std::env::var("WALLET_EVM_PRIVATE_KEY")
+                    .expect("WALLET_EVM_PRIVATE_KEY must be set"),
+                litecoin_testnet_address: std::env::var("WALLET_LITECOIN_TESTNET")
+                    .unwrap_or_else(|_| "tltc1qycexnc7fjqh2x4dnaht6gumcjxdzkdpjnlxe4s".to_string()),
+                evm_address: std::env::var("WALLET_EVM")
+                    .unwrap_or_else(|_| "0x004Cc75ACF4132Fc08cB6a252E767804F303F729".to_string()),
+                starknet_address: std::env::var("WALLET_STARKNET").unwrap_or_else(|_| {
+                    "0x00609190b1348bcc06da44d58c79709495c11a5a6f0b9e154e1209f2a17dd933".to_string()
+                }),
+                starknet_private_key: std::env::var("STARKNET_PRIVATE_KEY").ok(),
+                solana_address: std::env::var("WALLET_SOLANA")
+                    .unwrap_or_else(|_| "YH4btvqb4JBWSEJh22MuA231ekpJ5JqbBXQY1apJtKH".to_string()),
+                solana_private_key: std::env::var("SOLANA_PRIVATE_KEY").ok(),
+                tron_address: std::env::var("WALLET_TRON")
+                    .unwrap_or_else(|_| "TWbEz5ibiL6dreiLJ5oBF5CwDkw6Xfe6KX".to_string()),
+                tron_private_key: std::env::var("TRON_PRIVATE_KEY").ok(),
+                sui_address: std::env::var("WALLET_SUI").unwrap_or_else(|_| {
+                    "0x79a1582388c16d0ab85904f320eb0527481391a9b9ab4b2ab46adc4c2564f9d0".to_string()
+                }),
+                sui_private_key: std::env::var("SUI_PRIVATE_KEY").ok(),
+                bitcoin_testnet_private_key: std::env::var("BITCOIN_TESTNET_PRIVATE_KEY").ok(),
+            },
+            scheduler: SchedulerConfig {
+                cron: std::env::var("SCHEDULER_CRON")
+                    .unwrap_or_else(|_| "0 0 */5 * * *".to_string()),
+                swap_timeout_secs: std::env::var("SWAP_TIMEOUT_SECS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(900),
+                poll_interval_secs: std::env::var("POLL_INTERVAL_SECS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(15),
+            },
+            rpc_urls: RpcUrlsConfig {
+                ethereum_sepolia: std::env::var("RPC_ETHEREUM_SEPOLIA")
+                    .unwrap_or_else(|_| "https://rpc.sepolia.org".to_string()),
+                base_sepolia: std::env::var("RPC_BASE_SEPOLIA")
+                    .unwrap_or_else(|_| "https://sepolia.base.org".to_string()),
+                arbitrum_sepolia: std::env::var("RPC_ARBITRUM_SEPOLIA")
+                    .unwrap_or_else(|_| "https://sepolia-rollup.arbitrum.io/rpc".to_string()),
+                solana_testnet: std::env::var("RPC_SOLANA_TESTNET")
+                    .unwrap_or_else(|_| "https://api.testnet.solana.com".to_string()),
+                starknet_sepolia: std::env::var("RPC_STARKNET_SEPOLIA")
+                    .unwrap_or_else(|_| "https://starknet-sepolia.public.blastapi.io".to_string()),
+                tron_shasta: std::env::var("RPC_TRON_SHASTA")
+                    .unwrap_or_else(|_| "https://api.shasta.trongrid.io".to_string()),
+                sui_testnet: std::env::var("RPC_SUI_TESTNET")
+                    .unwrap_or_else(|_| "https://fullnode.testnet.sui.io:443".to_string()),
+                bitcoin_testnet: std::env::var("RPC_BITCOIN_TESTNET")
+                    .unwrap_or_else(|_| "https://blockstream.info/testnet/api".to_string()),
+            },
+            database_url: std::env::var("DATABASE_URL")
+                .unwrap_or_else(|_| "garden_swaps.db".to_string()),
+            network_mode,
+            enable_balance_check: std::env::var("ENABLE_BALANCE_CHECK")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(true), // Default to true
+        })
+    }
+
+    pub fn swap_timeout(&self) -> Duration {
+        Duration::from_secs(self.scheduler.swap_timeout_secs)
+    }
+
+    pub fn poll_interval(&self) -> Duration {
+        Duration::from_secs(self.scheduler.poll_interval_secs)
+    }
+}
+
+----------------------------------------
+
+File: src/scheduler/runner.rs
+use crate::chains::evm_signer::EvmSigner;
+use crate::chains::solana_signer::SolanaSigner;
+use anyhow::Context;
+use std::sync::Arc;
+use tokio::sync::Mutex; // ← not std::sync::Mutex
+
+use std::time::Instant;
+
+use chrono::Utc;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tracing::{error, info, warn};
+use uuid::Uuid;
+
+use crate::api::GardenApiClient;
+use crate::chains::{all_swap_pairs, requires_manual_deposit, SwapPair};
+use crate::config::AppConfig;
+use crate::db::Database;
+use crate::models::{OrderAsset, RunSummary, SubmitOrderRequest, SwapRecord, SwapStatus};
+
+pub struct SwapRunner {
+    api: Arc<GardenApiClient>,
+    db: Arc<Database>,
+    config: AppConfig,
+    evm_lock: Arc<Mutex<()>>,
+}
+
+impl SwapRunner {
+    pub fn new(api: Arc<GardenApiClient>, db: Arc<Database>, config: AppConfig) -> Self {
+        Self {
+            api,
+            db,
+            config,
+            evm_lock: Arc::new(Mutex::new(())),
+        }
+    }
+
+    /// Test a single swap pair by asset names
+    pub async fn test_single_swap(
+        &self,
+        from_asset: &str,
+        to_asset: &str,
+    ) -> Result<SwapRecord, anyhow::Error> {
+        use crate::chains::all_swap_pairs;
+
+        let pairs = all_swap_pairs(&self.config.wallets);
+        let pair = pairs
+            .iter()
+            .find(|p| p.source.asset == from_asset && p.destination.asset == to_asset)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Swap pair not found: {} -> {}\nUse 'list-swaps' to see available pairs",
+                    from_asset,
+                    to_asset
+                )
+            })?;
+
+        let run_id = uuid::Uuid::new_v4().to_string();
+        info!("Testing single swap: {}", pair.label());
+
+        let record = self.run_single_swap(&run_id, pair).await;
+
+        // Save to database
+        let summary = crate::models::RunSummary {
+            run_id: run_id.clone(),
+            total_swaps: 1,
+            completed: if record.status == SwapStatus::Completed {
+                1
+            } else {
+                0
+            },
+            failed: if record.status == SwapStatus::Failed {
+                1
+            } else {
+                0
+            },
+            timed_out: if record.status == SwapStatus::TimedOut {
+                1
+            } else {
+                0
+            },
+            pending: if record.status == SwapStatus::Pending {
+                1
+            } else {
+                0
+            },
+            started_at: record.started_at,
+            results: vec![record.clone()],
+        };
+
+        let _ = self.db.insert_run_summary(&summary);
+
+        Ok(record)
+    }
+
+    /// Run all swap pairs CONCURRENTLY - all swaps start at once
+    /// Run all swap pairs in batches, filtering by available balance
+    pub async fn run_all(&self, check_balance: bool) -> RunSummary {
+        let run_id = Uuid::new_v4().to_string();
+        let started_at = Utc::now();
+        let all_pairs = all_swap_pairs(&self.config.wallets);
+        
+        info!(run_id = %run_id, "=== Starting CONCURRENT swap test run ({} pairs) ===", all_pairs.len());
+        info!("All swaps will run simultaneously");
+
+        // Filter pairs based on available balance (only if check_balance is enabled)
+        let executable_pairs = if check_balance {
+            info!("Checking balances for EVM chains only (fast check)...");
+            let mut filtered_pairs = Vec::new();
+            
+            for pair in &all_pairs {
+                let chain = pair.source.asset.split(':').next().unwrap_or("");
+                
+                // Only check balance for EVM chains (Arbitrum, Base, Ethereum)
+                // Skip balance check for other chains to avoid delays
+                if !chain.contains("arbitrum") && !chain.contains("base") && !chain.contains("ethereum") {
+                    filtered_pairs.push(pair.clone());
+                    continue;
+                }
+
+                let rpc_url = match self.rpc_url_for_chain(chain) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        info!("Skipping {} (no RPC configured)", pair.label());
+                        continue;
+                    }
+                };
+
+                match crate::chains::balance_checker::check_balance(
+                    chain,
+                    &pair.source.asset,
+                    &pair.source.owner,
+                    &pair.source.default_from_amount,
+                    &rpc_url,
+                )
+                .await
+                {
+                    Ok(true) => {
+                        filtered_pairs.push(pair.clone());
+                    }
+                    Ok(false) => {
+                        info!("⏭️  Skipping {} (insufficient balance)", pair.label());
+                    }
+                    Err(e) => {
+                        warn!("Balance check error for {}: {}, will attempt anyway", pair.label(), e);
+                        filtered_pairs.push(pair.clone());
+                    }
+                }
+            }
+
+            info!(
+                "✅ Balance check complete: {}/{} pairs will be attempted",
+                filtered_pairs.len(),
+                all_pairs.len()
+            );
+            filtered_pairs
+        } else {
+            info!("Balance checking disabled - attempting all {} pairs", all_pairs.len());
+            all_pairs.clone()
+        };
+
+        let total = executable_pairs.len();
+
+        info!("Spawning ALL {} swaps concurrently (no batching)", total);
+        
+        let mut set: JoinSet<SwapRecord> = JoinSet::new();
+
+        // Spawn ALL swaps at once
+        for pair in executable_pairs {
+            let api = Arc::clone(&self.api);
+            let db = Arc::clone(&self.db);
+            let config = self.config.clone();
+            let run_id_c = run_id.clone();
+            let pair_c = pair.clone();
+
+            let evm_lock = Arc::clone(&self.evm_lock);
+            set.spawn(async move {
+                let runner = SwapRunner {
+                    api,
+                    db,
+                    config,
+                    evm_lock,
+                };
+                runner.run_single_swap(&run_id_c, &pair_c).await
+            });
+        }
+
+        // Collect all results as they complete
+        let mut records: Vec<SwapRecord> = Vec::with_capacity(total);
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok(record) => {
+                    info!(
+                        pair = %record.swap_pair,
+                        status = %record.status,
+                        duration = ?record.duration_secs,
+                        "✅ Task finished"
+                    );
+                    records.push(record);
+                }
+                Err(e) => error!("Swap task panicked: {}", e),
+            }
+        }
+
+        let completed = records
+            .iter()
+            .filter(|r| r.status == SwapStatus::Completed)
+            .count();
+        let failed = records
+            .iter()
+            .filter(|r| r.status == SwapStatus::Failed)
+            .count();
+        let timed_out = records
+            .iter()
+            .filter(|r| r.status == SwapStatus::TimedOut)
+            .count();
+        let pending = records
+            .iter()
+            .filter(|r| r.status == SwapStatus::Pending)
+            .count();
+
+        info!(
+            run_id = %run_id,
+            "=== Run complete: total={} ok={} fail={} timeout={} pending={} ===",
+            total, completed, failed, timed_out, pending
+        );
+
+        let summary = RunSummary {
+            run_id,
+            total_swaps: total,
+            completed,
+            failed,
+            timed_out,
+            pending,
+            started_at,
+            results: records,
+        };
+
+        if let Err(e) = self.db.insert_run_summary(&summary) {
+            error!("Failed to save run summary: {}", e);
+        }
+
+        summary
+    }
+
+    async fn run_single_swap(&self, run_id: &str, pair: &SwapPair) -> SwapRecord {
+        let mut record = SwapRecord::new(
+            run_id,
+            &pair.source.asset,
+            &pair.destination.asset,
+            &pair.source.default_from_amount,
+        );
+
+        info!(pair = %pair.label(), "Starting swap");
+
+        // Persist initial record
+        match self.db.insert_swap_record(&record) {
+            Ok(id) => record.id = Some(id),
+            Err(e) => error!("Failed to insert initial record: {}", e),
+        }
+
+        // ── Step 1: Get quote ──────────────────────────────────────────────
+        let quote = match self
+            .api
+            .get_quote(
+                &pair.source.asset,
+                &pair.destination.asset,
+                &pair.source.default_from_amount,
+            )
+            .await
+        {
+            Ok(q) => q,
+            Err(e) => return self.fail(record, format!("Quote failed: {}", e)),
+        };
+
+        info!(
+            pair = %pair.label(),
+            src = %quote.source.amount,
+            dst = %quote.destination.amount,
+            "Quote received"
+        );
+
+        // ── Step 2: Submit order ───────────────────────────────────────────
+        let req = SubmitOrderRequest {
+            source: OrderAsset {
+                asset: quote.source.asset.clone(),
+                owner: pair.source.owner.clone(),
+                amount: quote.source.amount.clone(),
+            },
+            destination: OrderAsset {
+                asset: quote.destination.asset.clone(),
+                owner: pair.destination.owner.clone(),
+                amount: quote.destination.amount.clone(),
+            },
+        };
+
+        let order_resp = match self.api.submit_order(&req).await {
+            Ok(r) => r,
+            Err(e) => return self.fail(record, format!("Submit order failed: {}", e)),
+        };
+
+        let order_id = order_resp.result.order_id.clone();
+        record.order_id = Some(order_id.clone());
+        record.deposit_address = order_resp.result.to.clone();
+        record.status = SwapStatus::Pending;
+
+        info!(pair = %pair.label(), order_id = %order_id, "Order submitted");
+        
+        // Debug: Log the full order response to see what fields are available
+        info!(
+            pair = %pair.label(),
+            "Order response fields: versioned_tx={}, versioned_tx_gasless={}, initiate_transaction={}, typed_data={}",
+            order_resp.result.versioned_tx.is_some(),
+            order_resp.result.versioned_tx_gasless.is_some(),
+            order_resp.result.initiate_transaction.is_some(),
+            order_resp.result.typed_data.is_some()
+        );
+
+        // Log UTXO deposit address prominently
+        if requires_manual_deposit(&pair.source.asset) {
+            if let Some(ref addr) = order_resp.result.to {
+                info!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    "[DEPOSIT NEEDED] Send {} {} to {}",
+                    pair.source.default_from_amount,
+                    pair.source.asset,
+                    addr
+                );
+            }
+        }
+        let init_result = self
+            .dispatch_initiation(&pair.source.asset, &order_resp.result)
+            .await;
+        match init_result {
+            Ok(hash) => {
+                info!(pair = %pair.label(), tx = %hash, "Source initiation sent");
+                record.source_initiate_tx = Some(hash);
+            }
+            Err(e) => {
+                if !requires_manual_deposit(&pair.source.asset) {
+                    return self.fail(record, format!("Initiation failed: {}", e));
+                }
+                // manual deposit chains: log and continue polling
+                warn!(pair = %pair.label(), "Awaiting manual deposit: {}", e);
+            }
+        }
+
+        // Log EVM transaction data (keep for debugging)
+        if let Some(ref tx) = order_resp.result.initiate_transaction {
+            info!(pair = %pair.label(), "EVM initiate_transaction: {}",
+                serde_json::to_string(tx).unwrap_or_default());
+        }
+
+        if let Err(e) = self.db.update_swap_record(&record) {
+            error!("Failed to update record to Pending: {}", e);
+        }
+
+        // ── Step 3: Poll for completion with DB updates on each poll ──────
+        let timeout = self.config.swap_timeout();
+        let poll_every = self.config.poll_interval();
+        let deadline = Instant::now() + timeout;
+        let mut poll_count: u32 = 0;
+
+        loop {
+            sleep(poll_every).await;
+            poll_count += 1;
+
+            if Instant::now() >= deadline {
+                warn!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    polls = poll_count,
+                    "⏰ Swap timed out after {}s",
+                    timeout.as_secs()
+                );
+                let now = Utc::now();
+                record.status = SwapStatus::TimedOut;
+                record.error_message = Some(format!(
+                    "Timed out after {}s ({} polls)",
+                    timeout.as_secs(),
+                    poll_count
+                ));
+                record.completed_at = Some(now);
+                record.duration_secs = Some((now - record.started_at).num_seconds());
+                let _ = self.db.update_swap_record(&record);
+                return record;
+            }
+
+            let status_resp = match self.api.get_order_status(&order_id).await {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!(pair = %pair.label(), "Poll #{} error: {}. Retrying...", poll_count, e);
+                    continue;
+                }
+            };
+
+            let src = &status_resp.result.source_swap;
+            let dst = &status_resp.result.destination_swap;
+
+            info!(
+                pair = %pair.label(),
+                poll = poll_count,
+                src_init = %src.initiate_tx_hash.as_deref().unwrap_or("—"),
+                src_redeem = %src.redeem_tx_hash.as_deref().unwrap_or("—"),
+                dst_init = %dst.initiate_tx_hash.as_deref().unwrap_or("—"),
+                dst_redeem = %dst.redeem_tx_hash.as_deref().unwrap_or("—"),
+                "Poll"
+            );
+
+            // Update TX hashes
+            let prev_src_init = record.source_initiate_tx.clone();
+            record.source_initiate_tx = src.initiate_tx_hash.clone();
+            record.source_redeem_tx = src.redeem_tx_hash.clone();
+            record.dest_initiate_tx = dst.initiate_tx_hash.clone();
+            record.dest_redeem_tx = dst.redeem_tx_hash.clone();
+
+            // Update DB on every poll when TX hashes change
+            if record.source_initiate_tx != prev_src_init
+                || record.dest_initiate_tx.is_some()
+                || record.dest_redeem_tx.is_some()
+            {
+                if let Err(e) = self.db.update_swap_record(&record) {
+                    warn!(pair = %pair.label(), "Failed to persist poll state: {}", e);
+                }
+            }
+
+            // Terminal state: destination redeemed = success
+            if dst.is_redeemed() {
+                let now = Utc::now();
+                record.status = SwapStatus::Completed;
+                record.completed_at = Some(now);
+                record.duration_secs = Some((now - record.started_at).num_seconds());
+                info!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    polls = poll_count,
+                    duration_secs = record.duration_secs.unwrap_or(0),
+                    "✅ Swap completed"
+                );
+                let _ = self.db.update_swap_record(&record);
+                return record;
+            }
+
+            // Terminal state: source refunded = failed swap
+            if src.is_refunded() {
+                let now = Utc::now();
+                record.status = SwapStatus::Refunded;
+                record.error_message = Some("Source swap was refunded".to_string());
+                record.completed_at = Some(now);
+                record.duration_secs = Some((now - record.started_at).num_seconds());
+                warn!(
+                    pair = %pair.label(),
+                    order_id = %order_id,
+                    polls = poll_count,
+                    "↩️  Swap refunded"
+                );
+                let _ = self.db.update_swap_record(&record);
+                return record;
+            }
+        }
+    }
+    async fn dispatch_initiation(
+        &self,
+        source_asset: &str,
+        order_result: &crate::models::SubmitOrderResult,
+    ) -> Result<String, anyhow::Error> {
+        let chain = source_asset.split(':').next().unwrap_or("");
+
+        match chain {
+            c if c.starts_with("ethereum_")
+                || c.starts_with("base_")
+                || c.starts_with("arbitrum_") =>
+            {
+                let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
+                
+                // Check if approval transaction is needed (for ERC20 tokens)
+                if let Some(approval_tx) = &order_result.approval_transaction {
+                    info!("Approval transaction required for ERC20 token");
+                    let rpc_url = self.rpc_url_for_chain(chain)?;
+                    
+                    info!("Executing approval transaction via RPC");
+                    let approval_hash = signer.send_transaction(approval_tx, &rpc_url).await?;
+                    info!("Approval transaction sent: {}", approval_hash);
+                    
+                    // Wait a bit for approval to be mined
+                    info!("Waiting 10s for approval transaction to be mined...");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                }
+                
+                // Check if gasless is available (typed_data present)
+                if let Some(typed_data) = &order_result.typed_data {
+                    // Try EIP-712 gasless flow first
+                    info!("Attempting EIP-712 gasless initiation for {}", source_asset);
+                    
+                    // Sign typed data for gasless initiation
+                    let signature = signer.sign_typed_data(typed_data).await?;
+
+                    let order_id = &order_result.order_id;
+                    info!("Submitting EIP-712 signature for order {}", order_id);
+                    
+                    // Try gasless, but fall back to direct transaction if it fails
+                    match self.api.initiate_swap_gasless_evm(order_id, &signature).await {
+                        Ok(_) => {
+                            info!("EVM gasless initiation submitted successfully");
+                            return Ok(format!("gasless-evm-{}", order_id));
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Gasless initiation failed: {}. Falling back to direct transaction broadcast.",
+                                e
+                            );
+                            
+                            // Fall through to direct transaction broadcast
+                            if let Some(tx_data) = &order_result.initiate_transaction {
+                                let rpc_url = self.rpc_url_for_chain(chain)?;
+                                info!("Broadcasting EVM transaction via RPC (fallback)");
+                                let tx_hash = signer.send_transaction(tx_data, &rpc_url).await?;
+                                info!("EVM transaction broadcasted: {}", tx_hash);
+                                return Ok(tx_hash);
+                            } else {
+                                return Err(anyhow::anyhow!(
+                                    "Gasless failed and no initiate_transaction available for fallback"
+                                ));
+                            }
+                        }
+                    }
+                } else if let Some(tx_data) = &order_result.initiate_transaction {
+                    // No gasless available, use traditional transaction broadcasting
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not available (typed_data=null). Using traditional transaction broadcasting."
+                    );
+                    
+                    let rpc_url = self.rpc_url_for_chain(chain)?;
+                    
+                    info!("Broadcasting EVM transaction via RPC");
+                    let tx_hash = signer.send_transaction(tx_data, &rpc_url).await?;
+                    
+                    info!("EVM transaction broadcasted: {}", tx_hash);
+                    Ok(tx_hash)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "No typed_data or initiate_transaction in EVM order response"
+                    ))
+                }
+            }
+            c if c.starts_with("tron_") => Err(anyhow::anyhow!("Tron signing not yet implemented")),
+
+            c if c.starts_with("starknet_") => {
+                Err(anyhow::anyhow!("Starknet signing not yet implemented"))
+            }
+
+            c if c.starts_with("solana_") => {
+                // Check if private key is configured
+                info!(
+                    asset = %source_asset,
+                    "Checking Solana private key: is_some={}",
+                    self.config.wallets.solana_private_key.is_some()
+                );
+                
+                let private_key = self
+                    .config
+                    .wallets
+                    .solana_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "SOLANA_PRIVATE_KEY not set in .env. \
+                            Please add your Solana private key to enable automatic signing."
+                        )
+                    })?;
+
+                let signer = SolanaSigner::new(private_key)
+                    .context("Failed to create Solana signer")?;
+
+                // Check if gasless is available (versioned_tx_gasless present)
+                if let Some(versioned_tx_gasless) = &order_result.versioned_tx_gasless {
+                    info!(
+                        asset = %source_asset,
+                        "Using versioned_tx_gasless ({} chars) - GASLESS MODE",
+                        versioned_tx_gasless.len()
+                    );
+
+                    // Sign the gasless transaction
+                    info!(asset = %source_asset, "Signing Solana gasless transaction...");
+                    let signed_tx_base64 = signer
+                        .sign_transaction(versioned_tx_gasless)
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Solana signing failed");
+                            anyhow::anyhow!("Failed to sign Solana transaction: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, "Signed transaction length: {} chars", signed_tx_base64.len());
+
+                    // Submit via gasless /initiate endpoint (not PATCH)
+                    let order_id = &order_result.order_id;
+                    info!(asset = %source_asset, order_id = %order_id, "Submitting via gasless /initiate endpoint...");
+                    
+                    let tx_hash = self.api
+                        .initiate_swap_gasless_solana(order_id, &signed_tx_base64)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Gasless initiation failed");
+                            anyhow::anyhow!("Failed to initiate swap via gasless endpoint: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, order_id = %order_id, tx_hash = %tx_hash, "Gasless initiation submitted successfully");
+                    Ok(tx_hash)
+                } else if let Some(versioned_tx) = &order_result.versioned_tx {
+                    // Non-gasless: broadcast directly to Solana RPC
+                    warn!(
+                        asset = %source_asset,
+                        "Gasless not enabled (versioned_tx_gasless=null). Broadcasting to Solana RPC directly."
+                    );
+                    
+                    info!(
+                        asset = %source_asset,
+                        "Using versioned_tx ({} chars) - NON-GASLESS MODE",
+                        versioned_tx.len()
+                    );
+
+                    let rpc_url = self.config.rpc_urls.solana_testnet.clone();
+                    info!(asset = %source_asset, "Broadcasting to Solana RPC: {}", rpc_url);
+                    
+                    // Use sign_and_send to broadcast directly
+                    let tx_hash = signer
+                        .sign_and_send(versioned_tx, &rpc_url)
+                        .await
+                        .map_err(|e| {
+                            error!(asset = %source_asset, error = %e, "Solana broadcast failed");
+                            anyhow::anyhow!("Failed to broadcast Solana transaction: {}", e)
+                        })?;
+
+                    info!(asset = %source_asset, "Solana transaction broadcasted: {}", tx_hash);
+                    Ok(tx_hash)
+                } else {
+                    Err(anyhow::anyhow!("No versioned_tx or versioned_tx_gasless in Solana response"))
+                }
+            }
+
+            c if c.starts_with("bitcoin_") || c.starts_with("litecoin_") => {
+                // Check if Bitcoin private key is configured
+                let private_key_wif = self
+                    .config
+                    .wallets
+                    .bitcoin_testnet_private_key
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "BITCOIN_TESTNET_PRIVATE_KEY not set in .env. \
+                            Bitcoin swaps require manual deposit or set your WIF private key."
+                        )
+                    })?;
+
+                info!(asset = %source_asset, "Bitcoin private key found, initiating automatic transaction");
+
+                // Get deposit address from order
+                let deposit_address = order_result
+                    .to
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No deposit address in order response"))?;
+
+                // Parse amount from order response
+                let amount_sats: u64 = order_result
+                    .amount
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No amount in order response"))?
+                    .parse()
+                    .context("Failed to parse Bitcoin amount")?;
+
+                info!(
+                    "Bitcoin swap: sending {} sats to {}",
+                    amount_sats, deposit_address
+                );
+
+                // Initialize Bitcoin signer and provider
+                use crate::chains::bitcoin_signer::BitcoinSigner;
+                use crate::chains::bitcoin_provider::BitcoinProvider;
+                use bitcoin::Network;
+
+                let network = if c.contains("testnet") {
+                    Network::Testnet
+                } else {
+                    Network::Bitcoin
+                };
+
+                let signer = BitcoinSigner::new(private_key_wif.clone(), network)
+                    .context("Failed to create Bitcoin signer")?;
+
+                let provider = BitcoinProvider::new(self.config.rpc_urls.bitcoin_testnet.clone());
+
+                // Get wallet address
+                let wallet_address = signer.get_address()?;
+                info!("Bitcoin wallet address: {}", wallet_address);
+
+                // Fetch UTXOs
+                let all_utxos = provider
+                    .get_utxos(&wallet_address)
+                    .await
+                    .context("Failed to fetch Bitcoin UTXOs")?;
+
+                if all_utxos.is_empty() {
+                    anyhow::bail!("No UTXOs available for Bitcoin address {}", wallet_address);
+                }
+
+                let total_available: u64 = all_utxos.iter().map(|u| u.value).sum();
+                info!(
+                    "Found {} UTXOs with total {} sats",
+                    all_utxos.len(),
+                    total_available
+                );
+
+                // Estimate fee
+                let fee_rate = provider.estimate_fee().await.unwrap_or(2); // sats/vbyte
+                
+                // Select UTXOs - use only what we need (greedy algorithm)
+                let mut selected_utxos = Vec::new();
+                let mut selected_total: u64 = 0;
+                
+                // Sort UTXOs by value (largest first) for efficiency
+                let mut sorted_utxos = all_utxos.clone();
+                sorted_utxos.sort_by(|a, b| b.value.cmp(&a.value));
+                
+                // Estimate fee for transaction (start with 2 outputs: recipient + change)
+                let mut estimated_fee = provider.calculate_fee(1, 2, fee_rate);
+                
+                for utxo in sorted_utxos {
+                    selected_utxos.push(utxo.clone());
+                    selected_total += utxo.value;
+                    
+                    // Recalculate fee with current number of inputs
+                    estimated_fee = provider.calculate_fee(selected_utxos.len(), 2, fee_rate);
+                    
+                    // Check if we have enough
+                    if selected_total >= amount_sats + estimated_fee {
+                        break;
+                    }
+                }
+
+                info!(
+                    "Selected {} UTXOs with total {} sats (need {} sats including fee)",
+                    selected_utxos.len(),
+                    selected_total,
+                    amount_sats + estimated_fee
+                );
+                info!("Estimated fee: {} sats ({} sats/vbyte)", estimated_fee, fee_rate);
+
+                if selected_total < amount_sats + estimated_fee {
+                    anyhow::bail!(
+                        "Insufficient Bitcoin balance: have {} sats, need {} sats (amount: {}, fee: {})",
+                        selected_total,
+                        amount_sats + estimated_fee,
+                        amount_sats,
+                        estimated_fee
+                    );
+                }
+
+                // Build and sign transaction
+                info!("Building Bitcoin transaction with {} UTXOs, fee: {} sats", selected_utxos.len(), estimated_fee);
+                let tx_hex = match signer
+                    .send(deposit_address, amount_sats, selected_utxos, estimated_fee)
+                    .await
+                {
+                    Ok(hex) => hex,
+                    Err(e) => {
+                        error!("Failed to build Bitcoin transaction: {}", e);
+                        anyhow::bail!("Failed to build Bitcoin transaction: {}", e);
+                    }
+                };
+
+                // Broadcast transaction
+                let txid = provider
+                    .broadcast(&tx_hex)
+                    .await
+                    .context("Failed to broadcast Bitcoin transaction")?;
+
+                info!("Bitcoin transaction broadcasted: {}", txid);
+                Ok(txid)
+            }
+
+            _ => order_result
+                .to
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("No deposit address returned")),
+        }
+    }
+
+    fn rpc_url_for_chain(&self, chain: &str) -> Result<String, anyhow::Error> {
+        match chain {
+            "ethereum_sepolia" => Ok(self.config.rpc_urls.ethereum_sepolia.clone()),
+            "base_sepolia" => Ok(self.config.rpc_urls.base_sepolia.clone()),
+            "arbitrum_sepolia" => Ok(self.config.rpc_urls.arbitrum_sepolia.clone()),
+            _ => Err(anyhow::anyhow!(
+                "No RPC URL configured for chain: {}",
+                chain
+            )),
+        }
+    }
+    fn fail(&self, mut record: SwapRecord, message: String) -> SwapRecord {
+        error!(pair = %record.swap_pair, "❌ {}", message);
+        let now = Utc::now();
+        record.status = SwapStatus::Failed;
+        record.error_message = Some(message);
+        record.completed_at = Some(now);
+        record.duration_secs = Some((now - record.started_at).num_seconds());
+        // Only update if we have an ID (initial insert succeeded)
+        if record.id.is_some() {
+            let _ = self.db.update_swap_record(&record);
+        }
+        record
+    }
+}
+
+----------------------------------------
+
+File: src/scheduler/mod.rs
+pub mod runner;
+
+use std::sync::Arc;
+
+use anyhow::Result;
+use tokio_cron_scheduler::{Job, JobScheduler};
+use tracing::info;
+
+use crate::api::GardenApiClient;
+use crate::config::AppConfig;
+use crate::db::Database;
+use crate::models::RunSummary;
+use runner::SwapRunner;
+
+pub async fn start_scheduler(
+    config: AppConfig,
+    api: Arc<GardenApiClient>,
+    db: Arc<Database>,
+) -> Result<()> {
+    let cron = config.scheduler.cron.clone();
+    info!("Starting scheduler with cron: {}", cron);
+
+    let sched = JobScheduler::new().await?;
+
+    let config_c = config.clone();
+    let api_c = Arc::clone(&api);
+    let db_c = Arc::clone(&db);
+
+    let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
+        let config = config_c.clone();
+        let api = Arc::clone(&api_c);
+        let db = Arc::clone(&db_c);
+        Box::pin(async move {
+            info!("Cron fired — starting swap test run");
+            let runner = SwapRunner::new(api, db, config.clone());
+            let summary = runner.run_all(config.enable_balance_check).await;
+            print_summary(&summary);
+        })
+    })?;
+
+    sched.add(job).await?;
+    sched.start().await?;
+
+    info!("Scheduler running — waiting for next trigger...");
+    loop {
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+    }
+}
+
+fn print_summary(s: &RunSummary) {
+    info!("┌──────────────────────────────────────────────────────┐");
+    info!("│              SWAP TEST RUN SUMMARY                   │");
+    info!("├──────────────────────────────────────────────────────┤");
+    info!("│ Run ID  : {:<43} │", &s.run_id[..s.run_id.len().min(43)]);
+    info!("│ Total   : {:<43} │", s.total_swaps);
+    info!("│ OK      : {:<43} │", s.completed);
+    info!("│ Failed  : {:<43} │", s.failed);
+    info!("│ Timeout : {:<43} │", s.timed_out);
+    info!("│ Pending : {:<43} │", s.pending);
+    info!("├────────────────────────────────────┬─────────────────┤");
+    info!("│ Swap Pair                          │ Status          │");
+    info!("├────────────────────────────────────┼─────────────────┤");
+    for r in &s.results {
+        let pair = if r.swap_pair.len() > 36 {
+            &r.swap_pair[..36]
+        } else {
+            &r.swap_pair
+        };
+        info!("│ {:34} │ {:15} │", pair, r.status);
+    }
+    info!("└────────────────────────────────────┴─────────────────┘");
+}
+
+----------------------------------------
+
+File: src/models/mod.rs
+// All types consolidated in this file to avoid duplicate definitions
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+// ─── Quote ───────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct QuoteAsset {
+    pub asset: String,
+    pub amount: String,
+    pub display: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Quote {
+    pub source: QuoteAsset,
+    pub destination: QuoteAsset,
+    pub solver_id: String,
+    pub estimated_time: u64,
+    pub slippage: u64,
+    pub fee: u64,
+    pub fixed_fee: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct QuoteResponse {
+    pub status: String,
+    pub result: Vec<Quote>,
+}
+
+// ─── Order ───────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Clone)]
+pub struct OrderAsset {
+    pub asset: String,
+    pub owner: String,
+    pub amount: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitOrderRequest {
+    pub source: OrderAsset,
+    pub destination: OrderAsset,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SubmitOrderResult {
+    pub order_id: String,
+    pub to: Option<String>,
+    pub amount: Option<String>,
+    pub initiate_transaction: Option<serde_json::Value>,
+    pub approval_transaction: Option<serde_json::Value>,
+    pub typed_data: Option<serde_json::Value>,
+    pub versioned_tx: Option<String>,
+    pub versioned_tx_gasless: Option<String>,
+    pub ptb_bytes: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SubmitOrderResponse {
+    pub status: String,
+    pub result: SubmitOrderResult,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct SwapDetails {
+    pub swap_id: Option<String>,
+    pub chain: Option<String>,
+    pub asset: Option<String>,
+    pub amount: Option<String>,
+    pub secret_hash: Option<String>,
+    pub secret: Option<String>,
+    pub initiate_tx_hash: Option<String>,
+    pub redeem_tx_hash: Option<String>,
+    pub refund_tx_hash: Option<String>,
+    pub initiate_timestamp: Option<String>,
+    pub redeem_timestamp: Option<String>,
+    pub refund_timestamp: Option<String>,
+}
+
+impl SwapDetails {
+    pub fn is_redeemed(&self) -> bool {
+        self.redeem_tx_hash
+            .as_ref()
+            .map(|h| !h.is_empty())
+            .unwrap_or(false)
+    }
+    pub fn is_refunded(&self) -> bool {
+        self.refund_tx_hash
+            .as_ref()
+            .map(|h| !h.is_empty())
+            .unwrap_or(false)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct OrderStatus {
+    pub order_id: String,
+    pub source_swap: SwapDetails,
+    pub destination_swap: SwapDetails,
+    pub created_at: Option<String>,
+    pub solver_id: Option<String>,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct OrderStatusResponse {
+    pub status: String,
+    pub result: OrderStatus,
+}
+
+// ─── Swap Record / Summary ────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SwapStatus {
+    Initiated,
+    Pending,
+    Completed,
+    Refunded,
+    Failed,
+    TimedOut,
+}
+
+impl std::fmt::Display for SwapStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SwapStatus::Initiated => write!(f, "Initiated"),
+            SwapStatus::Pending => write!(f, "Pending"),
+            SwapStatus::Completed => write!(f, "Completed"),
+            SwapStatus::Refunded => write!(f, "Refunded"),
+            SwapStatus::Failed => write!(f, "Failed"),
+            SwapStatus::TimedOut => write!(f, "TimedOut"),
+        }
+    }
+}
+
+impl From<String> for SwapStatus {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "Initiated" => SwapStatus::Initiated,
+            "Pending" => SwapStatus::Pending,
+            "Completed" => SwapStatus::Completed,
+            "Refunded" => SwapStatus::Refunded,
+            "TimedOut" => SwapStatus::TimedOut,
+            _ => SwapStatus::Failed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwapRecord {
+    pub id: Option<i64>,
+    pub run_id: String,
+    pub swap_pair: String,
+    pub from_chain: String,
+    pub to_chain: String,
+    pub from_asset: String,
+    pub to_asset: String,
+    pub from_amount: String,
+    pub order_id: Option<String>,
+    pub deposit_address: Option<String>,
+    pub status: SwapStatus,
+    pub error_message: Option<String>,
+    pub source_initiate_tx: Option<String>,
+    pub source_redeem_tx: Option<String>,
+    pub dest_initiate_tx: Option<String>,
+    pub dest_redeem_tx: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub duration_secs: Option<i64>,
+}
+
+impl SwapRecord {
+    pub fn new(run_id: &str, from_asset: &str, to_asset: &str, from_amount: &str) -> Self {
+        let from_chain = from_asset.split(':').next().unwrap_or("").to_string();
+        let to_chain = to_asset.split(':').next().unwrap_or("").to_string();
+        SwapRecord {
+            id: None,
+            run_id: run_id.to_string(),
+            swap_pair: format!("{} -> {}", from_asset, to_asset),
+            from_chain,
+            to_chain,
+            from_asset: from_asset.to_string(),
+            to_asset: to_asset.to_string(),
+            from_amount: from_amount.to_string(),
+            order_id: None,
+            deposit_address: None,
+            status: SwapStatus::Initiated,
+            error_message: None,
+            source_initiate_tx: None,
+            source_redeem_tx: None,
+            dest_initiate_tx: None,
+            dest_redeem_tx: None,
+            started_at: Utc::now(),
+            completed_at: None,
+            duration_secs: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct RunSummary {
+    pub run_id: String,
+    pub total_swaps: usize,
+    pub completed: usize,
+    pub failed: usize,
+    pub timed_out: usize,
+    pub pending: usize,
+    pub started_at: DateTime<Utc>,
+    pub results: Vec<SwapRecord>,
+}
+
+----------------------------------------
+
+File: src/db/mod.rs
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use rusqlite::{Connection, params};
+use std::sync::Mutex;
+use tracing::info;
+
+use crate::models::{RunSummary, SwapRecord};
+
+pub struct Database {
+    conn: Mutex<Connection>,
+}
+
+// rusqlite::Connection is Send, so Database can be safely shared across threads
+unsafe impl Send for Database {}
+unsafe impl Sync for Database {}
+
+impl Database {
+    pub fn connect(path: &str) -> Result<Self> {
+        info!("Opening database: {}", path);
+        let conn = Connection::open(path).context("Failed to open SQLite database")?;
+        
+        // Enable WAL mode for better concurrent access
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;"
+        ).context("Failed to set WAL mode")?;
+        
+        let db = Self {
+            conn: Mutex::new(conn),
+        };
+        db.migrate()?;
+        Ok(db)
+    }
+
+    fn migrate(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS swap_records (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id              TEXT NOT NULL,
+                swap_pair           TEXT NOT NULL,
+                from_chain          TEXT NOT NULL,
+                to_chain            TEXT NOT NULL,
+                from_asset          TEXT NOT NULL,
+                to_asset            TEXT NOT NULL,
+                from_amount         TEXT NOT NULL,
+                order_id            TEXT,
+                deposit_address     TEXT,
+                status              TEXT NOT NULL DEFAULT 'Initiated',
+                error_message       TEXT,
+                source_initiate_tx  TEXT,
+                source_redeem_tx    TEXT,
+                dest_initiate_tx    TEXT,
+                dest_redeem_tx      TEXT,
+                started_at          TEXT NOT NULL,
+                completed_at        TEXT,
+                duration_secs       INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS run_summaries (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id      TEXT NOT NULL UNIQUE,
+                total_swaps INTEGER NOT NULL,
+                completed   INTEGER NOT NULL DEFAULT 0,
+                failed      INTEGER NOT NULL DEFAULT 0,
+                timed_out   INTEGER NOT NULL DEFAULT 0,
+                pending     INTEGER NOT NULL DEFAULT 0,
+                started_at  TEXT NOT NULL
+            );
+            "#,
+        )
+        .context("Migration failed")?;
+        info!("Database migration complete");
+        Ok(())
+    }
+
+    pub fn insert_swap_record(&self, record: &SwapRecord) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT INTO swap_records
+               (run_id, swap_pair, from_chain, to_chain, from_asset, to_asset, from_amount,
+                order_id, deposit_address, status, error_message,
+                source_initiate_tx, source_redeem_tx, dest_initiate_tx, dest_redeem_tx,
+                started_at, completed_at, duration_secs)
+               VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)"#,
+            params![
+                record.run_id,
+                record.swap_pair,
+                record.from_chain,
+                record.to_chain,
+                record.from_asset,
+                record.to_asset,
+                record.from_amount,
+                record.order_id,
+                record.deposit_address,
+                record.status.to_string(),
+                record.error_message,
+                record.source_initiate_tx,
+                record.source_redeem_tx,
+                record.dest_initiate_tx,
+                record.dest_redeem_tx,
+                record.started_at.to_rfc3339(),
+                record.completed_at.map(|t: DateTime<Utc>| t.to_rfc3339()),
+                record.duration_secs,
+            ],
+        )
+        .context("Insert swap record failed")?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn update_swap_record(&self, record: &SwapRecord) -> Result<()> {
+        // Guard against None id
+        let id = match record.id {
+            Some(id) => id,
+            None => anyhow::bail!("Cannot update a record without an id"),
+        };
+        
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"UPDATE swap_records SET
+               order_id=?1, deposit_address=?2, status=?3, error_message=?4,
+               source_initiate_tx=?5, source_redeem_tx=?6,
+               dest_initiate_tx=?7, dest_redeem_tx=?8,
+               completed_at=?9, duration_secs=?10
+               WHERE id=?11"#,
+            params![
+                record.order_id,
+                record.deposit_address,
+                record.status.to_string(),
+                record.error_message,
+                record.source_initiate_tx,
+                record.source_redeem_tx,
+                record.dest_initiate_tx,
+                record.dest_redeem_tx,
+                record.completed_at.map(|t: DateTime<Utc>| t.to_rfc3339()),
+                record.duration_secs,
+                id,
+            ],
+        )
+        .context("Update swap record failed")?;
+        Ok(())
+    }
+
+    pub fn insert_run_summary(&self, summary: &RunSummary) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT OR REPLACE INTO run_summaries
+               (run_id, total_swaps, completed, failed, timed_out, pending, started_at)
+               VALUES (?1,?2,?3,?4,?5,?6,?7)"#,
+            params![
+                summary.run_id,
+                summary.total_swaps as i64,
+                summary.completed as i64,
+                summary.failed as i64,
+                summary.timed_out as i64,
+                summary.pending as i64,
+                summary.started_at.to_rfc3339(),
+            ],
+        )
+        .context("Insert run summary failed")?;
+        Ok(())
+    }
+
+    pub fn get_recent_runs(&self, limit: i64) -> Result<Vec<RunSummary>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT run_id, total_swaps, completed, failed, timed_out, pending, started_at
+             FROM run_summaries ORDER BY started_at DESC LIMIT ?1",
+            )
+            .context("Prepare get_recent_runs failed")?;
+
+        let rows = stmt
+            .query_map(params![limit], |row| {
+                let started_at_str: String = row.get(6)?;
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, i64>(4)?,
+                    row.get::<_, i64>(5)?,
+                    started_at_str,
+                ))
+            })
+            .context("Query recent runs failed")?;
+
+        let mut summaries = Vec::new();
+        for row in rows {
+            let (run_id, total, completed, failed, timed_out, pending, started_at_str) =
+                row.context("Row read failed")?;
+            summaries.push(RunSummary {
+                run_id,
+                total_swaps: total as usize,
+                completed: completed as usize,
+                failed: failed as usize,
+                timed_out: timed_out as usize,
+                pending: pending as usize,
+                started_at: started_at_str
+                    .parse::<DateTime<Utc>>()
+                    .unwrap_or_else(|_| Utc::now()),
+                results: vec![],
+            });
+        }
+        Ok(summaries)
+    }
+}
+
+----------------------------------------
+
+File: src/main.rs
+mod api;
+mod chains;
+mod config;
+mod db;
+mod models;
+mod scheduler;
+
+use std::sync::Arc;
+
+use anyhow::Result;
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
+
+use api::GardenApiClient;
+use config::AppConfig;
+use db::Database;
+use scheduler::{runner::SwapRunner, start_scheduler};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_target(false)
+        .init();
+
+    // Load config
+    let config = AppConfig::from_env().map_err(|e| {
+        error!("Failed to load config: {}", e);
+        e
+    })?;
+
+    info!("Garden Swap Tester starting up");
+    info!("Network mode: {:?}", config.network_mode);
+    info!("API base URL: {}", config.garden.api_base_url);
+    info!("Scheduler cron: {}", config.scheduler.cron);
+    info!("Swap timeout: {}s", config.scheduler.swap_timeout_secs);
+    info!("Database: {}", config.database_url);
+    info!("Balance checking: {}", if config.enable_balance_check { "ENABLED" } else { "DISABLED" });
+
+    // Parse command from first CLI arg
+    let args: Vec<String> = std::env::args().collect();
+    let mode = args.get(1).map(|s| s.as_str()).unwrap_or("scheduler");
+
+    // Set up shared resources
+    let api = GardenApiClient::new(config.garden.clone())?;
+    let api = Arc::new(api);
+    let db = Arc::new(Database::connect(&config.database_url)?);
+
+    match mode {
+        // Run once immediately (useful for CI / one-shot testing)
+        "run-once" => {
+            info!("Mode: run-once — executing all swaps concurrently");
+            let runner = SwapRunner::new(api, db, config.clone());
+            let summary = runner.run_all(config.enable_balance_check).await;
+
+            println!("\n═══ Final Run Summary ═══");
+            println!("Run ID   : {}", summary.run_id);
+            println!("Total    : {}", summary.total_swaps);
+            println!("Completed: {}", summary.completed);
+            println!("Failed   : {}", summary.failed);
+            println!("Timed Out: {}", summary.timed_out);
+            println!("Pending  : {}", summary.pending);
+            println!();
+
+            for r in &summary.results {
+                let marker = match r.status {
+                    models::SwapStatus::Completed => "✅",
+                    models::SwapStatus::Failed => "❌",
+                    models::SwapStatus::TimedOut => "⏰",
+                    models::SwapStatus::Refunded => "↩️ ",
+                    _ => "⏳",
+                };
+                println!(
+                    "{} {:55} | {:12} | {}",
+                    marker,
+                    r.swap_pair,
+                    r.status,
+                    r.error_message.as_deref().unwrap_or("")
+                );
+            }
+
+            // Exit with non-zero if any failures
+            if summary.failed > 0 || summary.timed_out > 0 {
+                std::process::exit(1);
+            }
+        }
+
+        // Test a single swap pair
+        "test-swap" => {
+            let swap_spec = args.get(2).ok_or_else(|| {
+                anyhow::anyhow!("Usage: cargo run --release -- test-swap <from_asset> <to_asset>\nExample: cargo run --release -- test-swap ethereum_sepolia:wbtc base_sepolia:wbtc")
+            })?;
+            let to_asset = args.get(3).ok_or_else(|| {
+                anyhow::anyhow!("Usage: cargo run --release -- test-swap <from_asset> <to_asset>\nExample: cargo run --release -- test-swap ethereum_sepolia:wbtc base_sepolia:wbtc")
+            })?;
+
+            info!("Mode: test-swap — testing single swap {} -> {}", swap_spec, to_asset);
+            
+            let runner = SwapRunner::new(api, db, config);
+            let result = runner.test_single_swap(swap_spec, to_asset).await?;
+
+            println!("\n═══ Swap Test Result ═══");
+            println!("Pair      : {}", result.swap_pair);
+            println!("Status    : {}", result.status);
+            println!("Order ID  : {}", result.order_id.as_deref().unwrap_or("N/A"));
+            println!("Duration  : {}s", result.duration_secs.unwrap_or(0));
+            
+            if let Some(ref addr) = result.deposit_address {
+                println!("Deposit   : {}", addr);
+            }
+            
+            if let Some(ref src_init) = result.source_initiate_tx {
+                println!("Src Init  : {}", src_init);
+            }
+            if let Some(ref dst_redeem) = result.dest_redeem_tx {
+                println!("Dst Redeem: {}", dst_redeem);
+            }
+            
+            if let Some(ref err) = result.error_message {
+                println!("Error     : {}", err);
+            }
+            
+            println!();
+
+            // Exit with non-zero if failed
+            if result.status == models::SwapStatus::Failed 
+                || result.status == models::SwapStatus::TimedOut {
+                std::process::exit(1);
+            }
+        }
+
+        // Show history from DB
+        "history" => {
+            info!("Mode: history — showing recent runs");
+            let runs = db.get_recent_runs(10)?;
+            if runs.is_empty() {
+                println!("No runs found in database.");
+            } else {
+                for run in runs {
+                    println!(
+                        "[{}] {} | total={} ✅={} ❌={} ⏰={}",
+                        run.started_at.format("%Y-%m-%d %H:%M UTC"),
+                        run.run_id,
+                        run.total_swaps,
+                        run.completed,
+                        run.failed,
+                        run.timed_out,
+                    );
+                }
+            }
+        }
+
+        // List available swap pairs
+        "list-swaps" => {
+            info!("Mode: list-swaps — showing all available swap pairs");
+            let pairs = chains::all_swap_pairs(&config.wallets);
+            
+            println!("\n═══ Available Swap Pairs ({}) ═══\n", pairs.len());
+            for (idx, pair) in pairs.iter().enumerate() {
+                let manual = if chains::requires_manual_deposit(&pair.source.asset) {
+                    " ⚠️  DEPOSIT"
+                } else {
+                    ""
+                };
+                println!(
+                    "{:2}. {} -> {}{}",
+                    idx + 1,
+                    pair.source.asset,
+                    pair.destination.asset,
+                    manual
+                );
+            }
+            println!();
+        }
+
+        // Default: start the cron scheduler
+        _ => {
+            info!("Mode: scheduler — starting cron loop");
+            println!("Garden Swap Tester running in scheduler mode.");
+            println!("Cron: {}", config.scheduler.cron);
+            println!("Press Ctrl+C to stop.\n");
+
+            start_scheduler(config, api, db).await?;
+        }
+    }
+
+    Ok(())
+}
+
+----------------------------------------
+
+File: src/api/mod.rs
+use anyhow::{Context, Result, anyhow};
+use reqwest::Client;
+use serde_json::Value;
+use tracing::{debug, info};
+
+use crate::config::GardenConfig;
+use crate::models::{
+    OrderStatusResponse, Quote, QuoteResponse, SubmitOrderRequest, SubmitOrderResponse,
+};
+
+pub struct GardenApiClient {
+    client: Client,
+    config: GardenConfig,
+    auth_token: Option<String>,
+}
+
+impl GardenApiClient {
+    pub fn new(config: GardenConfig) -> Result<Self> {
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .cookie_store(true) // Enable cookie storage for SIWE
+            .build()
+            .context("Failed to build HTTP client")?;
+        Ok(Self { 
+            client, 
+            config,
+            auth_token: None,
+        })
+    }
+
+    fn app_id_header(&self) -> (&'static str, String) {
+        ("garden-app-id", self.config.app_id.clone())
+    }
+
+    fn kiosk_header(&self) -> (&'static str, &'static str) {
+        ("x-kiosk-mode", "enabled")
+    }
+
+    /// Get Authorization header if we have a token
+    fn auth_header(&self) -> Option<(&'static str, String)> {
+        self.auth_token.as_ref().map(|token| {
+            ("Authorization", format!("Bearer {}", token))
+        })
+    }
+
+    /// Authenticate using SIWE to enable gasless transactions
+    #[allow(dead_code)]
+    pub async fn authenticate_siwe(&mut self, evm_private_key: &str) -> Result<()> {
+        use ethers::signers::{LocalWallet, Signer};
+        
+        info!("Authenticating with SIWE to enable gasless transactions...");
+        
+        // Parse wallet
+        let wallet: LocalWallet = evm_private_key.parse()
+            .context("Failed to parse EVM private key for SIWE")?;
+        let address = format!("{:?}", wallet.address());
+        
+        info!("SIWE: Getting nonce for address {}", address);
+        
+        // Step 1: Get nonce
+        let nonce_url = format!("{}/siwe/challenges", self.config.api_base_url);
+        let nonce_resp = self.client
+            .post(&nonce_url)
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .context("Failed to get SIWE nonce")?;
+        
+        let nonce_body: Value = nonce_resp.json().await
+            .context("Failed to parse nonce response")?;
+        
+        let nonce = nonce_body["result"]
+            .as_str()
+            .ok_or_else(|| anyhow!("No nonce in response"))?;
+        
+        info!("SIWE: Got nonce: {}", nonce);
+        
+        // Step 2: Create SIWE message
+        let domain = "testnet.garden.finance";
+        let uri = format!("https://{}", domain);
+        let statement = "Garden.fi";
+        let chain_id = 1; // Mainnet for signing (doesn't matter for testnet API)
+        
+        let expiration_time = chrono::Utc::now() + chrono::Duration::minutes(5);
+        
+        let message = format!(
+            "{} wants you to sign in with your Ethereum account:\n\
+            {}\n\n\
+            {}\n\n\
+            URI: {}\n\
+            Version: 1\n\
+            Chain ID: {}\n\
+            Nonce: {}\n\
+            Issued At: {}\n\
+            Expiration Time: {}",
+            domain,
+            address,
+            statement,
+            uri,
+            chain_id,
+            nonce,
+            chrono::Utc::now().to_rfc3339(),
+            expiration_time.to_rfc3339()
+        );
+        
+        info!("SIWE: Signing message...");
+        debug!("SIWE message:\n{}", message);
+        
+        // Step 3: Sign the message
+        let signature = wallet.sign_message(&message).await
+            .context("Failed to sign SIWE message")?;
+        let signature_hex = format!("0x{}", signature);
+        
+        info!("SIWE: Signature: {}", signature_hex);
+        
+        // Step 4: Get token
+        let token_url = format!("{}/siwe/tokens", self.config.api_base_url);
+        let token_payload = serde_json::json!({
+            "message": message,
+            "signature": signature_hex,
+            "nonce": nonce
+        });
+        
+        info!("SIWE: Getting auth token...");
+        
+        let token_resp = self.client
+            .post(&token_url)
+            .header("Content-Type", "application/json")
+            .json(&token_payload)
+            .send()
+            .await
+            .context("Failed to get SIWE token")?;
+        
+        let token_body: Value = token_resp.json().await
+            .context("Failed to parse token response")?;
+        
+        let token = token_body["result"]
+            .as_str()
+            .ok_or_else(|| anyhow!("No token in response: {:?}", token_body))?
+            .to_string();
+        
+        info!("SIWE: ✅ Authentication successful! Token obtained.");
+        self.auth_token = Some(token);
+        
+        Ok(())
+    }
+
+    // All three methods become async
+    pub async fn get_quote(
+        &self,
+        from_asset: &str,
+        to_asset: &str,
+        from_amount: &str,
+    ) -> Result<Quote> {
+        let url = format!(
+            "{}/v2/quote?from={}&to={}&from_amount={}",
+            self.config.api_base_url, from_asset, to_asset, from_amount
+        );
+
+        info!("GET quote {} -> {} ({})", from_asset, to_asset, from_amount);
+        debug!("URL: {}", url);
+
+        let (hk, hv) = self.app_id_header();
+        let resp = self
+            .client
+            .get(&url)
+            .header(hk, &hv)
+            .header("accept", "application/json")
+            .send() // ← .await added
+            .await
+            .context("Quote request failed")?;
+
+        let status = resp.status();
+        let body = resp.text().await.context("Failed to read quote body")?; // ← .await
+        debug!("Quote response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Quote API {} - {}", status, body));
+        }
+
+        let parsed: QuoteResponse =
+            serde_json::from_str(&body).context("Failed to parse quote response")?;
+
+        if parsed.status != "Ok" {
+            return Err(anyhow!("Quote non-Ok: {}", body));
+        }
+
+        parsed
+            .result
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("No quotes returned for {} -> {}", from_asset, to_asset))
+    }
+
+    pub async fn submit_order(&self, request: &SubmitOrderRequest) -> Result<SubmitOrderResponse> {
+        let url = format!("{}/v2/orders", self.config.api_base_url);
+        let body = serde_json::to_string(request).context("Failed to serialize order")?;
+
+        info!(
+            "POST order {} -> {}",
+            request.source.asset, request.destination.asset
+        );
+
+        let (hk, hv) = self.app_id_header();
+        let (kiosk_k, kiosk_v) = self.kiosk_header();
+        
+        let mut req = self
+            .client
+            .post(&url)
+            .header(hk, &hv)
+            .header(kiosk_k, kiosk_v)
+            .header("content-type", "application/json");
+        
+        // Add Authorization header if we have a token
+        if let Some((auth_k, auth_v)) = self.auth_header() {
+            info!("Using Authorization header for gasless");
+            req = req.header(auth_k, auth_v);
+        }
+        
+        let resp = req
+            .body(body)
+            .send()
+            .await
+            .context("Submit order request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read submit order body")?;
+        debug!("Submit order response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Submit order API {} - {}", status, body));
+        }
+
+        let parsed: SubmitOrderResponse =
+            serde_json::from_str(&body).context("Failed to parse submit order response")?;
+
+        if parsed.status != "Ok" {
+            return Err(anyhow!("Submit order non-Ok: {}", body));
+        }
+
+        Ok(parsed)
+    }
+
+    pub async fn get_order_status(&self, order_id: &str) -> Result<OrderStatusResponse> {
+        let url = format!("{}/v2/orders/{}", self.config.api_base_url, order_id);
+        debug!("GET order status {}", url);
+
+        let (hk, hv) = self.app_id_header();
+        let resp = self
+            .client
+            .get(&url)
+            .header(hk, &hv)
+            .header("accept", "application/json")
+            .send() // ← .await
+            .await
+            .context("Order status request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read order status body")?; // ← .await
+        debug!("Order status response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Order status API {} - {}", status, body));
+        }
+
+        let parsed: OrderStatusResponse =
+            serde_json::from_str(&body).context("Failed to parse order status response")?;
+
+        Ok(parsed)
+    }
+
+    /// Initiate swap using gasless PATCH endpoint (for EVM with signature)
+    pub async fn initiate_swap_gasless_evm(
+        &self,
+        order_id: &str,
+        signature: &str,
+    ) -> Result<()> {
+        let url = format!(
+            "{}/v2/orders/{}?action=initiate",
+            self.config.api_base_url, order_id
+        );
+
+        info!("PATCH initiate swap (gasless EVM) for order {}", order_id);
+        
+        let payload = serde_json::json!({
+            "signature": signature
+        });
+        
+        info!("Request URL: {}", url);
+        info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+
+        let (hk, hv) = self.app_id_header();
+        
+        let resp = self
+            .client
+            .patch(&url)
+            .header(hk, &hv)
+            .header("content-type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .context("Initiate swap gasless request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read initiate response body")?;
+        info!("Initiate response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Initiate swap API {} - {}", status, body));
+        }
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).context("Failed to parse initiate response")?;
+
+        if parsed.get("status").and_then(|s| s.as_str()) != Some("Ok") {
+            return Err(anyhow!("Initiate swap non-Ok: {}", body));
+        }
+
+        Ok(())
+    }
+
+    /// Initiate swap using gasless endpoint (for Solana)
+    /// Uses PATCH to /v2/orders/{id}?action=initiate with signature
+    pub async fn initiate_swap_gasless_solana(
+        &self,
+        order_id: &str,
+        serialized_tx: &str,
+    ) -> Result<String> {
+        let url = format!(
+            "{}/v2/orders/{}?action=initiate",
+            self.config.api_base_url, order_id
+        );
+
+        info!("PATCH initiate swap (gasless Solana) for order {}", order_id);
+        info!("Request URL: {}", url);
+        
+        let payload = serde_json::json!({
+            "signature": serialized_tx
+        });
+
+        let (hk, hv) = self.app_id_header();
+        
+        let mut req = self
+            .client
+            .patch(&url)
+            .header(hk, &hv)
+            .header("content-type", "application/json");
+        
+        // Add Authorization header if we have a token
+        if let Some((auth_k, auth_v)) = self.auth_header() {
+            info!("Using Authorization header for gasless Solana initiation");
+            req = req.header(auth_k, auth_v);
+        }
+        
+        let resp = req
+            .json(&payload)
+            .send()
+            .await
+            .context("Initiate swap gasless Solana request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read initiate response body")?;
+        info!("Initiate response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Initiate swap API {} - {}", status, body));
+        }
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).context("Failed to parse initiate response")?;
+
+        if parsed.get("status").and_then(|s| s.as_str()) != Some("Ok") {
+            return Err(anyhow!("Initiate swap non-Ok: {}", body));
+        }
+
+        // Return the transaction hash from result
+        let tx_hash = parsed.get("result")
+            .and_then(|r| r.as_str())
+            .ok_or_else(|| anyhow!("No result in initiate response"))?
+            .to_string();
+
+        Ok(tx_hash)
+    }
+
+    /// Initiate swap using gasless PATCH endpoint (legacy, for compatibility)
+    #[allow(dead_code)]
+    pub async fn initiate_swap_gasless(
+        &self,
+        order_id: &str,
+        payload: serde_json::Value,
+    ) -> Result<()> {
+        let url = format!(
+            "{}/v2/orders/{}?action=initiate",
+            self.config.api_base_url, order_id
+        );
+
+        info!("PATCH initiate swap (gasless) for order {}", order_id);
+        info!("Request URL: {}", url);
+        info!("Payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+
+        let (hk, hv) = self.app_id_header();
+        
+        // Try PATCH first (as documented)
+        let resp = self
+            .client
+            .patch(&url)
+            .header(hk, &hv)
+            .header("content-type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .context("Initiate swap gasless request failed")?;
+
+        let status = resp.status();
+        let body = resp
+            .text()
+            .await
+            .context("Failed to read initiate response body")?;
+        info!("Initiate response [{}]: {}", status, body);
+
+        if !status.is_success() {
+            return Err(anyhow!("Initiate swap API {} - {}", status, body));
+        }
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&body).context("Failed to parse initiate response")?;
+
+        if parsed.get("status").and_then(|s| s.as_str()) != Some("Ok") {
+            return Err(anyhow!("Initiate swap non-Ok: {}", body));
+        }
+
+        Ok(())
+    }
+}
+
+----------------------------------------
+
+File: src/chains/starknet_signer.rs
+use anyhow::{Context, Result};
+use serde_json::Value;
+use starknet::core::crypto::{ecdsa_sign, pedersen_hash};
+use starknet::core::types::FieldElement;
+use tracing::info;
+
+/// Starknet signer for gasless transactions
+/// Uses ECDSA signing with Pedersen hash for typed data
+#[allow(dead_code)]
+pub struct StarknetSigner {
+    private_key: FieldElement,
+}
+
+#[allow(dead_code)]
+impl StarknetSigner {
+    pub fn new(private_key: String) -> Result<Self> {
+        // Remove 0x prefix if present
+        let key_str = private_key.trim_start_matches("0x");
+        
+        // Parse private key as FieldElement
+        let private_key = FieldElement::from_hex_be(key_str)
+            .context("Failed to parse Starknet private key")?;
+        
+        Ok(Self { private_key })
+    }
+
+    /// Sign Starknet typed data for gasless initiation
+    /// Returns signature as array of hex strings [r, s]
+    pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<Vec<String>> {
+        info!("Signing Starknet typed data for gasless initiation");
+        
+        // Build message hash for Starknet
+        let message_hash = self.compute_message_hash(typed_data)?;
+        
+        info!("Message hash: {:?}", message_hash);
+        
+        // Sign the message hash
+        let signature = ecdsa_sign(&self.private_key, &message_hash)
+            .context("Failed to sign Starknet typed data")?;
+        
+        // Format signature as array of strings (decimal format, not hex)
+        // According to formatStarknetSignature in gardenjs.md
+        let sig_array = vec![
+            signature.r.to_string(),
+            signature.s.to_string(),
+        ];
+        
+        info!("Starknet signature generated: {:?}", sig_array);
+        
+        Ok(sig_array)
+    }
+
+    /// Compute message hash for Starknet typed data
+    fn compute_message_hash(&self, typed_data: &Value) -> Result<FieldElement> {
+        // For Starknet, we need to hash the typed data according to EIP-712-like structure
+        // This is a simplified version - in production, use proper Starknet typed data hashing
+        
+        let message = typed_data.get("message")
+            .ok_or_else(|| anyhow::anyhow!("Missing message"))?;
+        
+        // Extract fields from message
+        let redeemer = message.get("redeemer")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing redeemer"))?;
+        let amount = message.get("amount")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing amount"))?;
+        let timelock = message.get("timelock")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing timelock"))?;
+        
+        // Parse as FieldElements
+        let redeemer_fe = FieldElement::from_hex_be(redeemer.trim_start_matches("0x"))?;
+        let amount_fe = FieldElement::from_hex_be(amount.trim_start_matches("0x"))?;
+        let timelock_fe = FieldElement::from_hex_be(timelock.trim_start_matches("0x"))?;
+        
+        // Compute Pedersen hash
+        let hash1 = pedersen_hash(&redeemer_fe, &amount_fe);
+        let hash2 = pedersen_hash(&hash1, &timelock_fe);
+        
+        Ok(hash2)
+    }
+
+    /// Send a transaction to Starknet (non-gasless fallback)
+    pub async fn send_transaction(
+        &self,
+        _tx_data: &Value,
+        _rpc_url: &str,
+    ) -> Result<String> {
+        info!("Sending Starknet transaction via RPC (non-gasless)");
+        
+        // TODO: Implement Starknet transaction broadcasting
+        // This requires starknet-providers and proper transaction construction
+        Err(anyhow::anyhow!(
+            "Starknet non-gasless transaction broadcasting not yet implemented. \
+            Use gasless mode or implement RPC broadcasting."
+        ))
+    }
+}
+
+/* 
+Implementation Notes from gardenjs.md:
+
+1. Starknet uses typed data signing similar to EIP-712
+2. Domain structure:
+   {
+     name: 'HTLC',
+     version: '2',
+     chainId: '0x534e5f5345504f4c4941', // Starknet Sepolia
+     revision: 'ACTIVE'
+   }
+
+3. Message structure for Initiate:
+   {
+     redeemer: ContractAddress,
+     amount: u256,
+     timelock: u128,
+     secretHash: u128[],
+     verifyingContract: ContractAddress
+   }
+
+4. Signature format: Array of field elements [r, s]
+   - Must be formatted using formatStarknetSignature()
+   - Converts signature object to array format
+
+5. Gasless endpoint: PATCH /v2/orders/{orderId}?action=initiate
+   Body: { signature: ["0x...", "0x..."] }
+
+6. Dependencies needed:
+   - starknet-rs for signing
+   - starknet-crypto for cryptographic operations
+   - Add to Cargo.toml:
+     starknet = "0.9"
+     starknet-crypto = "0.6"
+*/
+
+----------------------------------------
+
+File: src/chains/tron_signer.rs
+use anyhow::{Context, Result};
+use serde_json::Value;
+use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+use sha2::{Digest, Sha256};
+use tracing::info;
+
+/// Tron signer for gasless transactions
+/// Uses ECDSA secp256k1 signing with SHA256 hashing
+#[allow(dead_code)]
+pub struct TronSigner {
+    secret_key: SecretKey,
+    public_key: PublicKey,
+}
+
+#[allow(dead_code)]
+impl TronSigner {
+    pub fn new(private_key: String) -> Result<Self> {
+        // Remove 0x prefix if present
+        let key_str = private_key.trim_start_matches("0x");
+        
+        // Parse private key as bytes
+        let key_bytes = hex::decode(key_str)
+            .context("Failed to decode Tron private key hex")?;
+        
+        // Create secp256k1 context
+        let secp = Secp256k1::new();
+        
+        // Create secret key
+        let secret_key = SecretKey::from_slice(&key_bytes)
+            .context("Invalid Tron private key")?;
+        
+        // Derive public key
+        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+        
+        Ok(Self {
+            secret_key,
+            public_key,
+        })
+    }
+
+    /// Sign Tron transaction for gasless initiation
+    /// Tron uses ECDSA secp256k1 signing with SHA256 hash
+    pub async fn sign_transaction(&self, tx_data: &Value) -> Result<String> {
+        info!("Signing Tron transaction for gasless initiation");
+        
+        // Get raw_data_hex from transaction
+        let raw_data_hex = tx_data
+            .get("raw_data_hex")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing raw_data_hex in transaction"))?;
+        
+        // Decode raw data
+        let raw_bytes = hex::decode(raw_data_hex.trim_start_matches("0x"))
+            .context("Failed to decode raw_data_hex")?;
+        
+        // Hash the raw data with SHA256 (Tron uses SHA256, not Keccak256)
+        let hash = Sha256::digest(&raw_bytes);
+        
+        // Create secp256k1 context
+        let secp = Secp256k1::new();
+        
+        // Create message from hash
+        let message = Message::from_digest_slice(&hash)
+            .context("Failed to create message from hash")?;
+        
+        // Sign the message
+        let signature = secp.sign_ecdsa(&message, &self.secret_key);
+        
+        // Serialize signature to compact format (64 bytes: r + s)
+        let sig_bytes = signature.serialize_compact();
+        
+        // Encode as hex with 0x prefix
+        let sig_hex = format!("0x{}", hex::encode(sig_bytes));
+        
+        info!("Tron signature generated: {}", sig_hex);
+        
+        Ok(sig_hex)
+    }
+
+    /// Send a signed transaction to Tron network (non-gasless fallback)
+    pub async fn send_raw_transaction(
+        &self,
+        signed_tx: &Value,
+        rpc_url: &str,
+    ) -> Result<String> {
+        info!("Sending Tron transaction via RPC (non-gasless)");
+        
+        // Create HTTP client
+        let client = reqwest::Client::new();
+        
+        // Tron RPC endpoint for broadcasting
+        let broadcast_url = format!("{}/wallet/broadcasttransaction", rpc_url);
+        
+        // Send transaction
+        let response = client
+            .post(&broadcast_url)
+            .json(signed_tx)
+            .send()
+            .await
+            .context("Failed to send Tron transaction")?;
+        
+        let status = response.status();
+        let body = response.text().await?;
+        
+        if !status.is_success() {
+            return Err(anyhow::anyhow!("Tron RPC error {}: {}", status, body));
+        }
+        
+        // Parse response
+        let result: Value = serde_json::from_str(&body)
+            .context("Failed to parse Tron response")?;
+        
+        // Extract transaction ID
+        let tx_id = result
+            .get("txid")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("No txid in Tron response"))?;
+        
+        info!("Tron transaction broadcasted: {}", tx_id);
+        
+        Ok(tx_id.to_string())
+    }
+
+    /// Get Tron address from public key
+    pub fn get_address(&self) -> Result<String> {
+        // Serialize public key (uncompressed, 65 bytes)
+        let pubkey_bytes = self.public_key.serialize_uncompressed();
+        
+        // Take last 64 bytes (skip the 0x04 prefix)
+        let pubkey_hash_input = &pubkey_bytes[1..];
+        
+        // Hash with SHA256 (Tron uses SHA256 for address derivation)
+        let hash = Sha256::digest(pubkey_hash_input);
+        
+        // Take last 20 bytes
+        let address_bytes = &hash[12..];
+        
+        // Add Tron prefix (0x41 for mainnet, 0xa0 for testnet)
+        let mut full_address = vec![0x41]; // Mainnet prefix
+        full_address.extend_from_slice(address_bytes);
+        
+        // Encode as base58
+        let address = bs58::encode(&full_address).into_string();
+        
+        Ok(address)
+    }
+}
+
+/* 
+Implementation Notes from gardenjs.md:
+
+1. Tron uses TronWeb for signing
+2. Transaction structure from API:
+   {
+     raw_data: {...},
+     raw_data_hex: "0x...",
+     txID: "..."
+   }
+
+3. Signing process:
+   - Use tronweb.trx.sign(transaction)
+   - Returns signed transaction object
+   - Extract signature from signed transaction
+
+4. Gasless endpoint: PATCH /v2/orders/{orderId}?action=initiate
+   Body: { signature: "0x..." }
+
+5. Non-gasless: POST signed transaction to Tron RPC
+   - Endpoint: /wallet/broadcasttransaction
+   - Body: signed transaction object
+   - Returns: { result: true, txid: "..." }
+
+6. Dependencies needed:
+   - No official Rust Tron library
+   - Options:
+     a) Implement custom signing using secp256k1
+     b) Use FFI to call TronWeb (Node.js)
+     c) Use HTTP API for signing service
+   
+7. Tron address format:
+   - Base58 encoded (starts with T)
+   - Example: TQa4rN2Vayesv5vmMAXzP5QA1PnPwD46w6
+
+8. Chain ID: 2494104990 (Shasta testnet)
+*/
+
+----------------------------------------
+
+File: src/chains/bitcoin_signer.rs
+use anyhow::{Context, Result};
+use bitcoin::{
+    Address, Network, PrivateKey, PublicKey, Transaction, TxIn, TxOut, OutPoint,
+    Sequence, Witness, ScriptBuf, Amount, absolute::LockTime,
+};
+use bitcoin::secp256k1::{Secp256k1, Message};
+use bitcoin::sighash::{SighashCache, EcdsaSighashType};
+use bitcoin::hashes::Hash;
+use serde::{Deserialize, Serialize};
+use tracing::info;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BitcoinUTXO {
+    pub txid: String,
+    pub vout: u32,
+    pub value: u64, // in satoshis
+    pub script_pubkey: String,
+}
+
+pub struct BitcoinSigner {
+    private_key: PrivateKey,
+    network: Network,
+}
+
+impl BitcoinSigner {
+    /// Create a new Bitcoin signer from a WIF private key
+    pub fn new(wif: String, network: Network) -> Result<Self> {
+        let private_key = PrivateKey::from_wif(&wif)
+            .context("Failed to parse Bitcoin WIF private key")?;
+        
+        Ok(Self {
+            private_key,
+            network,
+        })
+    }
+
+    /// Get the Bitcoin address for this wallet
+    pub fn get_address(&self) -> Result<String> {
+        let secp = Secp256k1::new();
+        let public_key = PublicKey::from_private_key(&secp, &self.private_key);
+        
+        // Generate P2WPKH (native segwit) address
+        let address = Address::p2wpkh(&public_key, self.network)
+            .context("Failed to generate P2WPKH address")?;
+        
+        Ok(address.to_string())
+    }
+
+    /// Get the public key
+    #[allow(dead_code)]
+    pub fn get_public_key(&self) -> String {
+        let secp = Secp256k1::new();
+        let public_key = PublicKey::from_private_key(&secp, &self.private_key);
+        public_key.to_string()
+    }
+
+    /// Send Bitcoin to an address
+    /// 
+    /// This function:
+    /// 1. Fetches UTXOs from the provider
+    /// 2. Builds a transaction with inputs and outputs
+    /// 3. Signs the transaction
+    /// 4. Returns the signed transaction hex for broadcasting
+    pub async fn send(
+        &self,
+        to_address: &str,
+        amount_sats: u64,
+        utxos: Vec<BitcoinUTXO>,
+        fee_sats: u64,
+    ) -> Result<String> {
+        info!("Building Bitcoin transaction: {} sats to {}", amount_sats, to_address);
+        
+        // Parse recipient address
+        let recipient_addr = to_address.parse::<Address<_>>()
+            .context("Invalid recipient address")?
+            .require_network(self.network)
+            .context("Address network mismatch")?;
+
+        // Calculate total input value
+        let total_input: u64 = utxos.iter().map(|u| u.value).sum();
+        
+        if total_input < amount_sats + fee_sats {
+            anyhow::bail!(
+                "Insufficient funds: have {} sats, need {} sats (amount: {}, fee: {})",
+                total_input,
+                amount_sats + fee_sats,
+                amount_sats,
+                fee_sats
+            );
+        }
+
+        // Build transaction
+        let mut tx = Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: Vec::new(),
+            output: Vec::new(),
+        };
+
+        // Add inputs from UTXOs
+        for utxo in &utxos {
+            // Decode hex and reverse bytes (Bitcoin uses little-endian)
+            let mut txid_bytes = hex::decode(&utxo.txid)
+                .context(format!("Invalid UTXO txid hex: {}", utxo.txid))?;
+            
+            if txid_bytes.len() != 32 {
+                anyhow::bail!("Invalid txid length: expected 32 bytes, got {}", txid_bytes.len());
+            }
+            
+            // Reverse bytes for Bitcoin's little-endian format
+            txid_bytes.reverse();
+            
+            let txid = bitcoin::Txid::from_slice(&txid_bytes)
+                .context(format!("Invalid UTXO txid: {}", utxo.txid))?;
+
+            info!("Adding input: txid={}, vout={}, value={}", utxo.txid, utxo.vout, utxo.value);
+
+            tx.input.push(TxIn {
+                previous_output: OutPoint {
+                    txid,
+                    vout: utxo.vout,
+                },
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                witness: Witness::new(),
+            });
+        }
+
+        // Add output to recipient
+        tx.output.push(TxOut {
+            value: Amount::from_sat(amount_sats),
+            script_pubkey: recipient_addr.script_pubkey(),
+        });
+
+        // Add change output if necessary
+        let change = total_input - amount_sats - fee_sats;
+        if change > 546 { // Dust limit
+            let change_addr = self.get_address()?
+                .parse::<Address<_>>()
+                .context("Invalid change address")?
+                .require_network(self.network)
+                .context("Change address network mismatch")?;
+
+            tx.output.push(TxOut {
+                value: Amount::from_sat(change),
+                script_pubkey: change_addr.script_pubkey(),
+            });
+        }
+
+        // Sign all inputs
+        let secp = Secp256k1::new();
+        let public_key = PublicKey::from_private_key(&secp, &self.private_key);
+        
+        // Compute all signatures first
+        let mut signatures = Vec::new();
+        
+        for (index, utxo) in utxos.iter().enumerate() {
+            info!("Computing signature for input {}/{}: txid={}, vout={}", index + 1, utxos.len(), utxo.txid, utxo.vout);
+            
+            // For P2WPKH, we need the script_pubkey of the output being spent
+            // This is a P2PKH script with the pubkey hash
+            let script_code = Address::p2wpkh(&public_key, self.network)
+                .context("Failed to create P2WPKH address")?
+                .script_pubkey();
+            
+            // Create a sighash cache for this transaction
+            let mut sighash_cache = SighashCache::new(&tx);
+            
+            // Compute sighash for P2WPKH input
+            let sighash = sighash_cache
+                .p2wpkh_signature_hash(
+                    index,
+                    &script_code,
+                    Amount::from_sat(utxo.value),
+                    EcdsaSighashType::All,
+                )
+                .context(format!("Failed to compute sighash for input {} (txid: {}, vout: {}, value: {})", 
+                    index, utxo.txid, utxo.vout, utxo.value))?;
+
+            let message = Message::from_digest(sighash.to_byte_array());
+            let signature = secp.sign_ecdsa(&message, &self.private_key.inner);
+            
+            signatures.push(signature);
+            info!("Signature computed for input {}", index + 1);
+        }
+        
+        // Now add witnesses to transaction
+        for (index, signature) in signatures.iter().enumerate() {
+            let mut witness = Witness::new();
+            let sig = bitcoin::ecdsa::Signature {
+                sig: *signature,
+                hash_ty: EcdsaSighashType::All,
+            };
+            witness.push(sig.to_vec());
+            witness.push(public_key.to_bytes());
+
+            tx.input[index].witness = witness;
+            info!("Input {} signed successfully", index + 1);
+        }
+
+        // Serialize transaction to hex
+        let tx_hex = bitcoin::consensus::encode::serialize_hex(&tx);
+        info!("Bitcoin transaction built: {} bytes", tx_hex.len() / 2);
+        
+        Ok(tx_hex)
+    }
+
+    /// Sign a message (for verification purposes)
+    #[allow(dead_code)]
+    pub fn sign_message(&self, message: &[u8]) -> Result<String> {
+        let secp = Secp256k1::new();
+        let msg = Message::from_digest_slice(message)
+            .context("Invalid message for signing")?;
+        
+        let signature = secp.sign_ecdsa(&msg, &self.private_key.inner);
+        Ok(hex::encode(signature.serialize_compact()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_address_generation() {
+        // Test with a known private key (testnet)
+        let wif = "cVt4o7BGAig1UXywgGSmARhxMdzP5qvQsxKkSsc1XEkw3tDTQFpy";
+        let signer = BitcoinSigner::new(wif.to_string(), Network::Testnet).unwrap();
+        
+        let address = signer.get_address().unwrap();
+        assert!(address.starts_with("tb1")); // Testnet bech32 address
+    }
+
+    #[test]
+    fn test_public_key() {
+        let wif = "cVt4o7BGAig1UXywgGSmARhxMdzP5qvQsxKkSsc1XEkw3tDTQFpy";
+        let signer = BitcoinSigner::new(wif.to_string(), Network::Testnet).unwrap();
+        
+        let pubkey = signer.get_public_key();
+        assert_eq!(pubkey.len(), 66); // Compressed public key hex
+    }
+}
+
+----------------------------------------
+
+File: src/chains/balance_checker.rs
+use anyhow::Result;
+use ethers::prelude::*;
+use std::str::FromStr;
+use std::sync::Arc;
+use tracing::{info, warn};
+
+/// Check if an address has sufficient balance for a swap
+pub async fn check_balance(
+    chain: &str,
+    asset: &str,
+    owner: &str,
+    required_amount: &str,
+    rpc_url: &str,
+) -> Result<bool> {
+    // Parse the required amount
+    let required: u128 = required_amount.parse().unwrap_or(0);
+    
+    if required == 0 {
+        return Ok(true); // No amount required
+    }
+
+    // Extract chain and token from asset (e.g., "arbitrum_sepolia:usdc")
+    let parts: Vec<&str> = asset.split(':').collect();
+    if parts.len() != 2 {
+        warn!("Invalid asset format: {}", asset);
+        return Ok(false);
+    }
+    
+    let token_symbol = parts[1];
+
+    // Check balance based on chain type
+    if chain.contains("sepolia") || chain.contains("base") || chain.contains("arbitrum") 
+        || chain.contains("ethereum") || chain.contains("evm") {
+        // Add timeout to prevent hanging
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            check_evm_balance(token_symbol, owner, required, rpc_url)
+        ).await {
+            Ok(result) => result,
+            Err(_) => {
+                warn!("Balance check timed out for {}, assuming sufficient", asset);
+                Ok(true) // Assume sufficient on timeout
+            }
+        }
+    } else if chain.contains("solana") {
+        check_solana_balance(token_symbol, owner, required, rpc_url).await
+    } else {
+        // For other chains (Bitcoin, Starknet, Tron, etc.), assume balance is sufficient
+        // These require manual checking or different APIs
+        info!("Skipping balance check for chain: {} (not implemented)", chain);
+        Ok(true)
+    }
+}
+
+/// Check EVM token balance
+async fn check_evm_balance(
+    token_symbol: &str,
+    owner: &str,
+    required: u128,
+    rpc_url: &str,
+) -> Result<bool> {
+    // Create provider with timeout
+    let provider = Provider::<Http>::try_from(rpc_url)
+        .map_err(|e| anyhow::anyhow!("Failed to create provider: {}", e))?;
+    
+    let address = Address::from_str(owner)
+        .map_err(|e| anyhow::anyhow!("Invalid address: {}", e))?;
+
+    // Check native token (ETH) balance
+    if token_symbol == "eth" {
+        match provider.get_balance(address, None).await {
+            Ok(balance) => {
+                let balance_u128: u128 = balance.as_u128();
+                
+                info!(
+                    "ETH balance: {} wei, required: {} wei, sufficient: {}",
+                    balance_u128,
+                    required,
+                    balance_u128 >= required
+                );
+                
+                return Ok(balance_u128 >= required);
+            }
+            Err(e) => {
+                warn!("Failed to get ETH balance: {}, assuming sufficient", e);
+                return Ok(true);
+            }
+        }
+    }
+
+    // For ERC20 tokens, try to get balance
+    match get_token_address(token_symbol, rpc_url) {
+        Ok(token_address) => {
+            // ERC20 balanceOf ABI
+            let abi_json = r#"[{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"type":"function"}]"#;
+            let abi: ethers::abi::Abi = serde_json::from_str(abi_json)?;
+            let contract = Contract::new(token_address, abi, Arc::new(provider));
+            
+            match contract.method::<_, U256>("balanceOf", address)?.call().await {
+                Ok(balance) => {
+                    let balance_u128: u128 = balance.as_u128();
+                    
+                    info!(
+                        "{} balance: {}, required: {}, sufficient: {}",
+                        token_symbol.to_uppercase(),
+                        balance_u128,
+                        required,
+                        balance_u128 >= required
+                    );
+                    
+                    Ok(balance_u128 >= required)
+                }
+                Err(e) => {
+                    warn!("Failed to get {} balance: {}, assuming sufficient", token_symbol, e);
+                    Ok(true)
+                }
+            }
+        }
+        Err(e) => {
+            warn!("Token address not found for {}: {}, assuming sufficient", token_symbol, e);
+            Ok(true)
+        }
+    }
+}
+
+/// Check Solana token balance
+async fn check_solana_balance(
+    _token_symbol: &str,
+    _owner: &str,
+    _required: u128,
+    _rpc_url: &str,
+) -> Result<bool> {
+    // Solana balance checking would require solana-client
+    // For now, assume sufficient balance
+    info!("Solana balance check not implemented, assuming sufficient");
+    Ok(true)
+}
+
+/// Get token contract address for a given symbol and chain
+fn get_token_address(symbol: &str, rpc_url: &str) -> Result<Address> {
+    // Token addresses for Sepolia testnets (devnet/testnet)
+    let address_str = if rpc_url.contains("arbitrum") {
+        match symbol.to_lowercase().as_str() {
+            "usdc" => "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Arbitrum Sepolia USDC
+            "wbtc" => "0xb5ae9785349186069c48794a763db39ec756b1cf", // Arbitrum Sepolia WBTC
+            _ => return Err(anyhow::anyhow!("Unknown token: {}", symbol)),
+        }
+    } else if rpc_url.contains("base") {
+        match symbol.to_lowercase().as_str() {
+            "usdc" => "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
+            "wbtc" => "0x4200000000000000000000000000000000000006", // Base Sepolia Wrapped ETH (placeholder)
+            "weth" => "0x4200000000000000000000000000000000000006", // Base Sepolia Wrapped ETH
+            _ => return Err(anyhow::anyhow!("Unknown token: {}", symbol)),
+        }
+    } else if rpc_url.contains("sepolia") || rpc_url.contains("ethereum") {
+        match symbol.to_lowercase().as_str() {
+            "usdc" => "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", // Ethereum Sepolia USDC
+            "wbtc" => "0x29f2D40B0605204364af54EC677bD022dA425d03", // Ethereum Sepolia WBTC
+            _ => return Err(anyhow::anyhow!("Unknown token: {}", symbol)),
+        }
+    } else {
+        return Err(anyhow::anyhow!("Unknown chain RPC: {}", rpc_url));
+    };
+
+    Address::from_str(address_str).map_err(|e| anyhow::anyhow!("Invalid address: {}", e))
+}
+
+----------------------------------------
+
+File: src/chains/mod.rs
+pub mod evm_signer;
+pub mod solana_signer;
+pub mod starknet_signer;
+pub mod tron_signer;
+pub mod sui_signer;
+pub mod balance_checker;
+pub mod bitcoin_signer;
+pub mod bitcoin_provider;
+
+use crate::config::WalletConfig;
+#[derive(Debug, Clone)]
+pub struct ChainAsset {
+    pub asset: String,
+    pub default_from_amount: String,
+    pub owner: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SwapPair {
+    pub source: ChainAsset,
+    pub destination: ChainAsset,
+}
+
+impl SwapPair {
+    pub fn label(&self) -> String {
+        format!("{} -> {}", self.source.asset, self.destination.asset)
+    }
+}
+
+/// Returns swap pairs optimized for minimal spending
+/// Uses MINIMUM amounts required by Garden API to reduce costs
+/// Includes round-trip pairs to maintain token balances for continuous testing
+/// Set ENABLE_ROUND_TRIPS=true to automatically add reverse swaps for balance maintenance
+pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
+    let btc = &wallets.bitcoin_testnet_address;
+    let _ltc = &wallets.litecoin_testnet_address;
+    let evm = &wallets.evm_address;
+    let stark = &wallets.starknet_address;
+    let sol = &wallets.solana_address;
+    let tron = &wallets.tron_address;
+    let _sui = &wallets.sui_address;
+
+    // Minimum amounts based on Garden API requirements:
+    // - BTC/WBTC: 50,000 sats (0.0005 BTC) = ~$50
+    // - USDC: 15,000,000 (15 USDC with 6 decimals) = ~$15
+    // - ETH: 5,000,000,000,000,000 wei (0.005 ETH) = ~$15-20
+    // - USDT: 15,000,000 (15 USDT with 6 decimals) = ~$15
+
+    macro_rules! pair {
+        ($fa:expr, $famt:expr, $fo:expr, $ta:expr, $to:expr) => {
+            SwapPair {
+                source: ChainAsset {
+                    asset: $fa.to_string(),
+                    default_from_amount: $famt.to_string(),
+                    owner: $fo.clone(),
+                },
+                destination: ChainAsset {
+                    asset: $ta.to_string(),
+                    default_from_amount: String::new(),
+                    owner: $to.clone(),
+                },
+            }
+        };
+    }
+
+    let mut pairs = vec![
+        // Native token swaps (ETH to SOL) - minimum: 0.005 ETH
+        pair!("ethereum_sepolia:eth", "5000000000000000", evm, "solana_testnet:sol", sol),
+        
+        // 1-3: WBTC swaps (minimum: 50,000 sats)
+        pair!("arbitrum_sepolia:wbtc", "50000", evm, "ethereum_sepolia:wbtc", evm),
+        pair!("arbitrum_sepolia:wbtc", "50000", evm, "alpen_signet:btc", btc),
+        pair!("arbitrum_sepolia:wbtc", "50000", evm, "alpen_testnet:sbtc", btc),
+        
+        // 4-12: USDC swaps from Arbitrum (minimum: 15,000,000 = 15 USDC)
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "base_sepolia:usdc", evm),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "bitcoin_testnet:btc", btc),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "citrea_testnet:usdc", evm),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "monad_testnet:usdc", evm),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "solana_testnet:usdc", sol),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "tron_shasta:usdt", tron),
+        pair!("arbitrum_sepolia:usdc", "15000000", evm, "xrpl_testnet:xrp", evm),
+        
+        // 13-22: Ethereum swaps (WBTC: 50k sats, USDC: 15M)
+        pair!("ethereum_sepolia:wbtc", "50000", evm, "alpen_testnet:usdc", btc),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "base_sepolia:usdc", evm),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "bitcoin_testnet:btc", btc),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "citrea_testnet:usdc", evm),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "monad_testnet:usdc", evm),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "solana_testnet:usdc", sol),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "tron_shasta:usdt", tron),
+        pair!("ethereum_sepolia:usdc", "15000000", evm, "xrpl_testnet:xrp", evm),
+        
+        // 23-49: Alpen, Base, Bitcoin swaps (BTC: 50k sats, USDC: 15M)
+        pair!("alpen_signet:btc", "50000", btc, "alpen_testnet:sbtc", btc),
+        pair!("alpen_signet:btc", "50000", btc, "base_sepolia:usdc", evm),
+        pair!("alpen_signet:btc", "50000", btc, "bitcoin_testnet:btc", btc),
+        pair!("alpen_signet:btc", "50000", btc, "bnbchain_testnet:wbtc", evm),
+        pair!("alpen_signet:btc", "50000", btc, "citrea_testnet:usdc", evm),
+        pair!("alpen_signet:btc", "50000", btc, "monad_testnet:usdc", evm),
+        pair!("alpen_signet:btc", "50000", btc, "solana_testnet:usdc", sol),
+        pair!("alpen_signet:btc", "50000", btc, "starknet_sepolia:wbtc", stark),
+        pair!("alpen_signet:btc", "50000", btc, "tron_shasta:usdt", tron),
+        pair!("alpen_signet:btc", "50000", btc, "xrpl_testnet:xrp", evm),
+        
+        pair!("alpen_testnet:sbtc", "50000", btc, "base_sepolia:usdc", evm),
+        pair!("alpen_testnet:usdc", "15000000", btc, "bitcoin_testnet:btc", btc),
+        pair!("alpen_testnet:usdc", "15000000", btc, "bnbchain_testnet:wbtc", evm),
+        pair!("alpen_testnet:usdc", "15000000", btc, "citrea_testnet:usdc", evm),
+        pair!("alpen_testnet:usdc", "15000000", btc, "monad_testnet:usdc", evm),
+        pair!("alpen_testnet:usdc", "15000000", btc, "solana_testnet:usdc", sol),
+        pair!("alpen_testnet:usdc", "15000000", btc, "starknet_sepolia:wbtc", stark),
+        pair!("alpen_testnet:usdc", "15000000", btc, "tron_shasta:usdt", tron),
+        pair!("alpen_testnet:usdc", "15000000", btc, "xrpl_testnet:xrp", evm),
+        
+        pair!("base_sepolia:usdc", "15000000", evm, "bitcoin_testnet:btc", btc),
+        pair!("base_sepolia:usdc", "15000000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("base_sepolia:cbltc", "50000", evm, "citrea_testnet:usdc", evm),
+        pair!("base_sepolia:usdc", "15000000", evm, "monad_testnet:usdc", evm),
+        pair!("base_sepolia:usdc", "15000000", evm, "solana_testnet:usdc", sol),
+        pair!("base_sepolia:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("base_sepolia:usdc", "15000000", evm, "tron_shasta:usdt", tron),
+        pair!("base_sepolia:usdc", "15000000", evm, "xrpl_testnet:xrp", evm),
+        
+        // 50-78: Bitcoin, BNB, Citrea, Monad, Solana, Starknet, Tron, XRPL swaps
+        pair!("bitcoin_testnet:btc", "50000", btc, "bnbchain_testnet:wbtc", evm),
+        pair!("bitcoin_testnet:btc", "50000", btc, "citrea_testnet:usdc", evm),
+        pair!("bitcoin_testnet:btc", "50000", btc, "monad_testnet:usdc", evm),
+        pair!("bitcoin_testnet:btc", "50000", btc, "solana_testnet:usdc", sol),
+        pair!("bitcoin_testnet:btc", "50000", btc, "starknet_sepolia:wbtc", stark),
+        pair!("bitcoin_testnet:btc", "50000", btc, "tron_shasta:usdt", tron),
+        pair!("bitcoin_testnet:btc", "50000", btc, "xrpl_testnet:xrp", evm),
+        
+        pair!("bnbchain_testnet:wbtc", "50000", evm, "citrea_testnet:usdc", evm),
+        pair!("bnbchain_testnet:wbtc", "50000", evm, "monad_testnet:usdc", evm),
+        pair!("bnbchain_testnet:wbtc", "50000", evm, "solana_testnet:usdc", sol),
+        pair!("bnbchain_testnet:wbtc", "50000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("bnbchain_testnet:wbtc", "50000", evm, "tron_shasta:usdt", tron),
+        pair!("bnbchain_testnet:wbtc", "50000", evm, "xrpl_testnet:xrp", evm),
+        
+        pair!("citrea_testnet:usdc", "15000000", evm, "monad_testnet:usdc", evm),
+        pair!("citrea_testnet:usdc", "15000000", evm, "solana_testnet:usdc", sol),
+        pair!("citrea_testnet:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("citrea_testnet:usdc", "15000000", evm, "tron_shasta:usdt", tron),
+        pair!("citrea_testnet:usdc", "15000000", evm, "xrpl_testnet:xrp", evm),
+        
+        pair!("monad_testnet:usdc", "15000000", evm, "solana_testnet:usdc", sol),
+        pair!("monad_testnet:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("monad_testnet:usdc", "15000000", evm, "tron_shasta:usdt", tron),
+        pair!("monad_testnet:usdc", "15000000", evm, "xrpl_testnet:xrp", evm),
+        
+        pair!("solana_testnet:usdc", "50000000", sol, "starknet_sepolia:wbtc", stark),
+        pair!("solana_testnet:usdc", "50000000", sol, "tron_shasta:usdt", tron),
+        pair!("solana_testnet:usdc", "15000000", sol, "xrpl_testnet:xrp", evm),
+        
+        // Native token swap (SOL to ETH) - minimum: 0.1 SOL (100000000 lamports)
+        pair!("solana_testnet:sol", "100000000", sol, "ethereum_sepolia:eth", evm),
+        
+        pair!("starknet_sepolia:wbtc", "50000", stark, "tron_shasta:usdt", tron),
+        pair!("starknet_sepolia:wbtc", "50000", stark, "xrpl_testnet:xrp", evm),
+        
+        pair!("tron_shasta:usdt", "15000000", tron, "xrpl_testnet:xrp", evm),
+        pair!("tron_shasta:wbtc", "50000", tron, "xrpl_testnet:xrp", evm),
+    ];
+
+    // Check if round-trip mode is enabled
+    let enable_round_trips = std::env::var("ENABLE_ROUND_TRIPS")
+        .unwrap_or_else(|_| "false".to_string())
+        .to_lowercase() == "true";
+
+    if enable_round_trips {
+        // Add round-trip pairs for continuous testing (swap back to maintain balances)
+        // Focus on working chains: Arbitrum, Base, Ethereum, Solana
+        // Using minimum amounts: USDC 15M, WBTC 50k sats, ETH 0.005
+        let round_trips = vec![
+            // Native token round-trip (SOL back to ETH)
+            pair!("solana_testnet:sol", "100000000", sol, "ethereum_sepolia:eth", evm),
+            
+            // USDC round-trips between working EVM chains (15 USDC minimum)
+            pair!("base_sepolia:usdc", "15000000", evm, "arbitrum_sepolia:usdc", evm),
+            pair!("ethereum_sepolia:usdc", "15000000", evm, "arbitrum_sepolia:usdc", evm),
+            pair!("arbitrum_sepolia:usdc", "15000000", evm, "ethereum_sepolia:usdc", evm),
+            
+            // Solana USDC round-trips (15 USDC minimum)
+            pair!("solana_testnet:usdc", "15000000", sol, "arbitrum_sepolia:usdc", evm),
+            pair!("solana_testnet:usdc", "15000000", sol, "base_sepolia:usdc", evm),
+            pair!("solana_testnet:usdc", "15000000", sol, "ethereum_sepolia:usdc", evm),
+            
+            // WBTC round-trips (50k sats minimum)
+            pair!("ethereum_sepolia:wbtc", "50000", evm, "arbitrum_sepolia:wbtc", evm),
+            pair!("base_sepolia:wbtc", "50000", evm, "arbitrum_sepolia:wbtc", evm),
+            
+            // Bitcoin round-trips (50k sats minimum - to get BTC back from other chains)
+            pair!("arbitrum_sepolia:wbtc", "50000", evm, "bitcoin_testnet:btc", btc),
+            pair!("base_sepolia:wbtc", "50000", evm, "bitcoin_testnet:btc", btc),
+            pair!("ethereum_sepolia:wbtc", "50000", evm, "bitcoin_testnet:btc", btc),
+        ];
+
+        let round_trip_count = round_trips.len();
+        pairs.extend(round_trips);
+        eprintln!("🔄 Round-trip mode enabled: {} total pairs (79 original + {} round-trips)", 
+            pairs.len(), round_trip_count);
+    } else {
+        eprintln!("📋 Standard mode: {} pairs (set ENABLE_ROUND_TRIPS=true for round-trips)", pairs.len());
+    }
+
+    pairs
+}
+
+pub fn requires_manual_deposit(asset: &str) -> bool {
+    asset.starts_with("bitcoin_") || asset.starts_with("litecoin_")
+}
+
+----------------------------------------
+
+File: src/chains/sui_signer.rs
+use anyhow::{Context, Result};
+use ed25519_dalek::{Signature, Signer, SigningKey};
+use serde_json::Value;
+use tracing::info;
+
+/// Sui signer for gasless transactions
+/// Uses Ed25519 keypair for signing PTBs (Programmable Transaction Blocks)
+#[allow(dead_code)]
+pub struct SuiSigner {
+    signing_key: SigningKey,
+}
+
+#[allow(dead_code)]
+impl SuiSigner {
+    pub fn new(private_key: String) -> Result<Self> {
+        // Remove 0x prefix if present
+        let key_str = private_key.trim_start_matches("0x");
+        
+        // Decode private key (should be 32 bytes for Ed25519)
+        let key_bytes = hex::decode(key_str)
+            .context("Failed to decode Sui private key hex")?;
+        
+        if key_bytes.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "Invalid Sui private key length: expected 32 bytes, got {}",
+                key_bytes.len()
+            ));
+        }
+        
+        // Create Ed25519 signing key
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(&key_bytes);
+        let signing_key = SigningKey::from_bytes(&key_array);
+        
+        Ok(Self { signing_key })
+    }
+
+    /// Sign Sui PTB (Programmable Transaction Block) for gasless initiation
+    /// Sui uses Ed25519 signatures
+    pub async fn sign_transaction(&self, tx_bytes: &str) -> Result<String> {
+        info!("Signing Sui PTB for gasless initiation");
+        
+        // Decode transaction bytes from base64
+        use base64::{engine::general_purpose, Engine as _};
+        let tx_data = general_purpose::STANDARD.decode(tx_bytes)
+            .context("Failed to decode Sui transaction bytes from base64")?;
+        
+        // Sign the transaction data
+        let signature: Signature = self.signing_key.sign(&tx_data);
+        
+        // Encode signature as base64
+        let sig_base64 = general_purpose::STANDARD.encode(signature.to_bytes());
+        
+        info!("Sui signature generated (base64): {}", sig_base64);
+        
+        Ok(sig_base64)
+    }
+
+    /// Execute a signed transaction on Sui network (non-gasless fallback)
+    pub async fn execute_transaction(
+        &self,
+        tx_bytes: &str,
+        signature: &str,
+        rpc_url: &str,
+    ) -> Result<String> {
+        info!("Executing Sui transaction via RPC (non-gasless)");
+        
+        // Create HTTP client
+        let client = reqwest::Client::new();
+        
+        // Prepare RPC request for sui_executeTransactionBlock
+        let request_body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sui_executeTransactionBlock",
+            "params": [
+                tx_bytes,
+                [signature],
+                {
+                    "showInput": true,
+                    "showRawInput": false,
+                    "showEffects": true,
+                    "showEvents": true,
+                    "showObjectChanges": false,
+                    "showBalanceChanges": false
+                },
+                "WaitForLocalExecution"
+            ]
+        });
+        
+        // Send request
+        let response = client
+            .post(rpc_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to send Sui RPC request")?;
+        
+        let status = response.status();
+        let body = response.text().await?;
+        
+        if !status.is_success() {
+            return Err(anyhow::anyhow!("Sui RPC error {}: {}", status, body));
+        }
+        
+        // Parse response
+        let result: Value = serde_json::from_str(&body)
+            .context("Failed to parse Sui response")?;
+        
+        // Extract transaction digest
+        let digest = result
+            .get("result")
+            .and_then(|r| r.get("digest"))
+            .and_then(|d| d.as_str())
+            .ok_or_else(|| anyhow::anyhow!("No digest in Sui response"))?;
+        
+        info!("Sui transaction executed: {}", digest);
+        
+        Ok(digest.to_string())
+    }
+
+    /// Get Sui address from public key
+    pub fn get_address(&self) -> Result<String> {
+        // Get public key
+        let public_key = self.signing_key.verifying_key();
+        let pubkey_bytes = public_key.to_bytes();
+        
+        // Sui address is derived from: BLAKE2b(flag || pubkey)[0..32]
+        // where flag = 0x00 for Ed25519
+        // Note: For now we use SHA256 as a placeholder since blake2 crate needs to be added
+        // TODO: Add blake2 = "0.10" to Cargo.toml and use proper BLAKE2b hashing
+        use sha2::{Digest, Sha256};
+        
+        let mut hasher = Sha256::new();
+        hasher.update(&[0x00]); // Ed25519 flag
+        hasher.update(&pubkey_bytes);
+        let hash = hasher.finalize();
+        
+        // Take first 32 bytes and encode as hex with 0x prefix
+        let address = format!("0x{}", hex::encode(&hash[..32]));
+        
+        Ok(address)
+    }
+}
+
+/* 
+Implementation Notes from gardenjs.md:
+
+1. Sui uses Ed25519 keypairs for signing
+2. Transaction format: PTB (Programmable Transaction Block)
+   - Serialized as base64 bytes
+   - Example: "AAACAgEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE..."
+
+3. Signing process:
+   - Deserialize PTB bytes
+   - Sign with Ed25519 keypair
+   - Return signature as base64
+
+4. Gasless endpoint: PATCH /v2/orders/{orderId}?action=initiate
+   Body: { signature: "base64_signature" }
+
+5. Non-gasless: Execute PTB directly
+   - Use sui_executeTransactionBlock RPC method
+   - Requires: transaction bytes + signature + public key
+
+6. Dependencies needed:
+   - sui-sdk = "0.2"
+   - sui-types = "0.2"
+   - Add to Cargo.toml:
+     sui-sdk = { version = "0.2", features = ["full"] }
+
+7. Sui address format:
+   - Hex encoded (0x prefix)
+   - 32 bytes (64 hex characters)
+   - Example: 0x5c438715b7dcc02d12ab92449153a1e5ade2301620d5bf60aa748f006726d369
+
+8. Chain: sui (mainnet) or sui_testnet
+
+9. Key generation from private key:
+   - Use Ed25519Keypair::from_bytes()
+   - Private key is 32 bytes
+   - Can derive from seed phrase or raw bytes
+
+10. Transaction structure from API:
+    {
+      transaction: "base64_ptb_bytes",
+      // For gasless:
+      transaction_gasless: "base64_ptb_bytes_without_gas"
+    }
+
+11. Wallet Standard integration:
+    - Sui uses @mysten/wallet-standard
+    - Feature: 'sui:signAndExecuteTransaction'
+    - Returns: { digest, effects, events }
+*/
+
+----------------------------------------
+
+File: src/chains/evm_signer.rs
+use anyhow::{Context, Result};
+use ethers::prelude::*;
+use ethers::signers::{LocalWallet, Signer};
+use ethers::types::transaction::eip712::TypedData;
+use serde_json::Value;
+use tracing::info;
+
+pub struct EvmSigner {
+    wallet: LocalWallet,
+}
+
+impl EvmSigner {
+    pub fn new(private_key: String) -> Result<Self> {
+        let wallet = private_key
+            .parse::<LocalWallet>()
+            .context("Failed to parse EVM private key")?;
+        Ok(Self { wallet })
+    }
+
+    /// Sign EIP-712 typed_data and return hex signature for gasless initiation
+    pub async fn sign_typed_data(&self, typed_data: &Value) -> Result<String> {
+        info!("Signing EIP-712 typed_data for gasless initiation");
+        
+        // Parse the typed_data JSON into ethers TypedData struct
+        let typed: TypedData = serde_json::from_value(typed_data.clone())
+            .context("Failed to parse typed_data as EIP-712")?;
+
+        // Sign the typed data
+        let signature = self
+            .wallet
+            .sign_typed_data(&typed)
+            .await
+            .context("Failed to sign EIP-712 typed_data")?;
+
+        // Format as hex string with 0x prefix
+        let sig_hex = format!("0x{}", signature);
+        info!("EIP-712 signature generated: {}", sig_hex);
+        
+        Ok(sig_hex)
+    }
+
+    /// Send a raw transaction to the network (non-gasless fallback)
+    pub async fn send_transaction(
+        &self,
+        tx_data: &Value,
+        rpc_url: &str,
+    ) -> Result<String> {
+        info!("Sending EVM transaction via RPC (non-gasless)");
+        
+        // Parse transaction data
+        let to: Address = tx_data["to"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'to' field"))?
+            .parse()
+            .context("Invalid 'to' address")?;
+        
+        let data: Bytes = tx_data["data"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'data' field"))?
+            .parse()
+            .context("Invalid 'data' hex")?;
+        
+        let value: U256 = tx_data["value"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'value' field"))?
+            .parse()
+            .context("Invalid 'value' hex")?;
+        
+        let gas_limit: U256 = tx_data["gas_limit"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing 'gas_limit' field"))?
+            .parse()
+            .context("Invalid 'gas_limit' hex")?;
+        
+        let chain_id: u64 = tx_data["chain_id"]
+            .as_u64()
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid 'chain_id'"))?;
+
+        // Connect to RPC
+        let provider = Provider::<Http>::try_from(rpc_url)
+            .context("Failed to connect to RPC")?;
+        let client = SignerMiddleware::new(provider, self.wallet.clone().with_chain_id(chain_id));
+
+        // Build transaction
+        let tx = TransactionRequest::new()
+            .to(to)
+            .data(data)
+            .value(value)
+            .gas(gas_limit);
+
+        info!("Broadcasting transaction to chain_id={}", chain_id);
+        
+        // Check balance first (with timeout to avoid blocking)
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            client.get_balance(self.wallet.address(), None)
+        ).await {
+            Ok(Ok(balance)) => {
+                info!("Wallet balance: {} wei ({} ETH)", balance, ethers::utils::format_units(balance, "ether").unwrap_or_default());
+            }
+            Ok(Err(e)) => {
+                info!("Could not check balance ({}), proceeding with transaction anyway", e);
+            }
+            Err(_) => {
+                info!("Balance check timed out after 10s, proceeding with transaction anyway");
+            }
+        }
+        
+        // Send transaction
+        let pending_tx = client
+            .send_transaction(tx, None)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to send transaction: {}. This usually means insufficient gas (need testnet ETH) or network issues.", e)
+            })?;
+
+        let tx_hash = format!("{:?}", pending_tx.tx_hash());
+        info!("Transaction sent: {}", tx_hash);
+        
+        // Verify transaction is in mempool
+        info!("Verifying transaction is in mempool...");
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.get_transaction(pending_tx.tx_hash())
+        ).await {
+            Ok(Ok(Some(tx))) => {
+                info!("✅ Transaction found in mempool");
+                info!("From: {:?}, To: {:?}, Value: {}", tx.from, tx.to, tx.value);
+                info!("Nonce: {}, Gas: {}", tx.nonce, tx.gas);
+            }
+            Ok(Ok(None)) => {
+                info!("⚠️  WARNING: Transaction NOT found in mempool! May have been dropped.");
+            }
+            Ok(Err(e)) => {
+                info!("⚠️  Error checking mempool: {}", e);
+            }
+            Err(_) => {
+                info!("⏱️  Mempool check timed out");
+            }
+        }
+        
+        // Wait for transaction to be mined (with timeout)
+        info!("Waiting for transaction to be mined (30s timeout)...");
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            pending_tx
+        ).await {
+            Ok(Ok(Some(receipt))) => {
+                info!("✅ Transaction mined in block {}", receipt.block_number.unwrap_or_default());
+                info!("Gas used: {}", receipt.gas_used.unwrap_or_default());
+                info!("Status: {}", if receipt.status == Some(1.into()) { "SUCCESS" } else { "FAILED" });
+            }
+            Ok(Ok(None)) => {
+                info!("⚠️  Transaction sent but receipt not available yet");
+            }
+            Ok(Err(e)) => {
+                info!("⚠️  Error waiting for receipt: {}", e);
+            }
+            Err(_) => {
+                info!("⏱️  Transaction confirmation timed out after 30s (may still be pending)");
+            }
+        }
+
+        Ok(tx_hash)
+    }
+}
+
+----------------------------------------
+
+File: src/chains/solana_signer.rs
+use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use solana_client::{
+    rpc_client::RpcClient,
+    rpc_config::RpcSendTransactionConfig,
+};
+use solana_sdk::{
+    signature::Keypair,
+    transaction::VersionedTransaction,
+};
+use tracing::info;
+
+pub struct SolanaSigner {
+    keypair: Keypair,
+}
+
+impl SolanaSigner {
+    pub fn new(private_key: &str) -> Result<Self> {
+        let keypair = Self::parse_private_key(private_key)?;
+        Ok(Self { keypair })
+    }
+
+    fn parse_private_key(key: &str) -> Result<Keypair> {
+        // Try base58 format first (most common)
+        if let Ok(bytes) = bs58::decode(key).into_vec() {
+            if bytes.len() == 64 {
+                return Keypair::try_from(&bytes[..])
+                    .context("Invalid Solana private key bytes");
+            }
+        }
+
+        // Try JSON array format [1,2,3,...]
+        if key.starts_with('[') {
+            if let Ok(bytes) = serde_json::from_str::<Vec<u8>>(key) {
+                if bytes.len() == 64 {
+                    return Keypair::try_from(&bytes[..])
+                        .context("Invalid Solana private key from JSON array");
+                }
+            }
+        }
+
+        anyhow::bail!("Invalid Solana private key format. Expected base58 string or JSON array of 64 bytes")
+    }
+
+    /// Sign a Solana transaction and return the signed transaction as base64
+    /// (for use with Garden's gasless PATCH endpoint)
+    pub fn sign_transaction(&self, versioned_tx_base64: &str) -> Result<String> {
+        // Decode the base64 transaction from Garden API
+        let tx_bytes = STANDARD
+            .decode(versioned_tx_base64)
+            .context("Failed to decode base64 transaction")?;
+
+        // Deserialize into VersionedTransaction
+        let tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
+            .context("Failed to deserialize Solana transaction")?;
+
+        info!("Solana transaction decoded, signing with our keypair...");
+
+        // Sign the transaction with our keypair
+        let message = tx.message.clone();
+        let signed_tx = VersionedTransaction::try_new(message, &[&self.keypair])
+            .context("Failed to sign Solana transaction")?;
+
+        info!(
+            "Transaction signed, signature: {}",
+            signed_tx.signatures[0]
+        );
+
+        // Serialize the signed transaction back to base64
+        let signed_bytes = bincode::serialize(&signed_tx)
+            .context("Failed to serialize signed transaction")?;
+        let signed_base64 = STANDARD.encode(&signed_bytes);
+
+        Ok(signed_base64)
+    }
+
+    /// Legacy method: Sign and send directly (kept for reference, but gasless is preferred)
+    pub async fn sign_and_send(
+        &self,
+        versioned_tx_base64: &str,
+        rpc_url: &str,
+    ) -> Result<String> {
+        // Decode the base64 transaction from Garden API
+        let tx_bytes = STANDARD
+            .decode(versioned_tx_base64)
+            .context("Failed to decode base64 transaction")?;
+
+        // Deserialize into VersionedTransaction
+        let tx: VersionedTransaction = bincode::deserialize(&tx_bytes)
+            .context("Failed to deserialize Solana transaction")?;
+
+        info!("Solana transaction decoded, signing with our keypair...");
+
+        // Sign the transaction with our keypair
+        // The message is already correct from Garden API, we just add our signature
+        let message = tx.message.clone();
+        let signed_tx = VersionedTransaction::try_new(message, &[&self.keypair])
+            .context("Failed to sign Solana transaction")?;
+
+        info!(
+            "Transaction signed, signature: {}",
+            signed_tx.signatures[0]
+        );
+
+        // Send immediately to avoid blockhash expiration
+        let rpc_url = rpc_url.to_string();
+        let signature = tokio::task::spawn_blocking(move || -> Result<_, anyhow::Error> {
+            let client = RpcClient::new(rpc_url);
+            
+            // Send with skip_preflight to bypass simulation
+            let config = RpcSendTransactionConfig {
+                skip_preflight: true,
+                preflight_commitment: None,
+                encoding: None,
+                max_retries: Some(3),
+                min_context_slot: None,
+            };
+            
+            client.send_transaction_with_config(&signed_tx, config)
+                .map_err(|e| anyhow::anyhow!("RPC error: {}", e))
+        })
+        .await
+        .context("Tokio task failed")??;
+
+        Ok(signature.to_string())
+    }
+}
+
+----------------------------------------
+
+File: src/chains/bitcoin_provider.rs
+use anyhow::{Context, Result};
+use reqwest::Client;
+use serde::Deserialize;
+use tracing::{info, warn};
+
+use super::bitcoin_signer::BitcoinUTXO;
+
+#[derive(Debug, Clone, Deserialize)]
+struct BlockstreamUTXO {
+    txid: String,
+    vout: u32,
+    value: u64,
+    status: BlockstreamStatus,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BlockstreamStatus {
+    confirmed: bool,
+}
+
+pub struct BitcoinProvider {
+    client: Client,
+    base_url: String,
+}
+
+impl BitcoinProvider {
+    pub fn new(base_url: String) -> Self {
+        // Create client with 30 second timeout for Bitcoin APIs
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| Client::new());
+            
+        Self {
+            client,
+            base_url,
+        }
+    }
+
+    /// Get UTXOs for an address
+    pub async fn get_utxos(&self, address: &str) -> Result<Vec<BitcoinUTXO>> {
+        let url = format!("{}/address/{}/utxo", self.base_url, address);
+        info!("Fetching UTXOs from: {}", url);
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .context(format!("Failed to fetch UTXOs from {}", url))?;
+
+        let status = response.status();
+        info!("UTXO API response status: {}", status);
+
+        if !status.is_success() {
+            anyhow::bail!("Failed to fetch UTXOs: HTTP {}", status);
+        }
+
+        let utxos: Vec<BlockstreamUTXO> = response
+            .json()
+            .await
+            .context("Failed to parse UTXO response")?;
+
+        info!("Received {} UTXOs from API (before filtering)", utxos.len());
+
+        // Convert to our UTXO format - include BOTH confirmed and unconfirmed
+        let bitcoin_utxos: Vec<BitcoinUTXO> = utxos
+            .into_iter()
+            .map(|u| {
+                info!(
+                    "UTXO: txid={}, vout={}, value={} sats, confirmed={}",
+                    u.txid, u.vout, u.value, u.status.confirmed
+                );
+                BitcoinUTXO {
+                    txid: u.txid,
+                    vout: u.vout,
+                    value: u.value,
+                    script_pubkey: String::new(), // Not needed for our use case
+                }
+            })
+            .collect();
+
+        info!("Found {} total UTXOs (confirmed + unconfirmed)", bitcoin_utxos.len());
+        
+        if bitcoin_utxos.is_empty() {
+            warn!("No UTXOs found for address {}. This could mean:", address);
+            warn!("  1. The address has no funds");
+            warn!("  2. All UTXOs are unconfirmed (wait for confirmations)");
+            warn!("  3. The API is experiencing issues");
+            warn!("  4. The address format doesn't match the private key");
+        }
+        
+        Ok(bitcoin_utxos)
+    }
+
+    /// Get balance for an address
+    #[allow(dead_code)]
+    pub async fn get_balance(&self, address: &str) -> Result<u64> {
+        let url = format!("{}/address/{}", self.base_url, address);
+        
+        #[derive(Deserialize)]
+        struct AddressInfo {
+            chain_stats: ChainStats,
+        }
+        
+        #[derive(Deserialize)]
+        struct ChainStats {
+            funded_txo_sum: u64,
+            spent_txo_sum: u64,
+        }
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to fetch address info")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to fetch balance: HTTP {}", response.status());
+        }
+
+        let info: AddressInfo = response
+            .json()
+            .await
+            .context("Failed to parse address info")?;
+
+        let balance = info.chain_stats.funded_txo_sum - info.chain_stats.spent_txo_sum;
+        Ok(balance)
+    }
+
+    /// Broadcast a transaction
+    pub async fn broadcast(&self, tx_hex: &str) -> Result<String> {
+        let url = format!("{}/tx", self.base_url);
+        info!("Broadcasting transaction to: {}", url);
+
+        let response = self
+            .client
+            .post(&url)
+            .body(tx_hex.to_string())
+            .send()
+            .await
+            .context("Failed to broadcast transaction")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Failed to broadcast transaction: {}", error_text);
+        }
+
+        let txid = response.text().await.context("Failed to get txid")?;
+        info!("Transaction broadcasted: {}", txid);
+        Ok(txid)
+    }
+
+    /// Estimate fee (returns fee in sats/vbyte)
+    pub async fn estimate_fee(&self) -> Result<u64> {
+        let url = format!("{}/fee-estimates", self.base_url);
+
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to fetch fee estimates")?;
+
+        if !response.status().is_success() {
+            warn!("Failed to fetch fee estimates, using default 2 sats/vbyte for testnet");
+            return Ok(2);
+        }
+
+        let fees: serde_json::Value = response
+            .json()
+            .await
+            .context("Failed to parse fee estimates")?;
+
+        // Get the fee for next 6 blocks (medium priority)
+        let fee = fees
+            .get("6")
+            .and_then(|v| v.as_f64())
+            .map(|f| f.ceil() as u64)
+            .unwrap_or(2);
+
+        // Cap fee at 20 sats/vbyte for testnet (mainnet fees don't apply)
+        let capped_fee = fee.min(20);
+        
+        if fee > 20 {
+            warn!("API returned high fee rate {} sats/vbyte, capping at 20 sats/vbyte for testnet", fee);
+        }
+
+        info!("Estimated fee: {} sats/vbyte", capped_fee);
+        Ok(capped_fee)
+    }
+
+    /// Calculate transaction fee based on inputs and outputs
+    /// Typical P2WPKH transaction: ~140 vbytes for 1 input, 2 outputs
+    pub fn calculate_fee(&self, num_inputs: usize, num_outputs: usize, fee_rate: u64) -> u64 {
+        // P2WPKH transaction size estimation
+        // Base: 10.5 vbytes
+        // Input: 68 vbytes each
+        // Output: 31 vbytes each
+        let vbytes = 10.5 + (num_inputs as f64 * 68.0) + (num_outputs as f64 * 31.0);
+        (vbytes.ceil() as u64) * fee_rate
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_fee_calculation() {
+        let provider = BitcoinProvider::new("https://blockstream.info/testnet/api".to_string());
+        
+        // 1 input, 2 outputs (typical transaction)
+        let fee = provider.calculate_fee(1, 2, 10);
+        assert!(fee > 0);
+        assert!(fee < 2000); // Should be reasonable
+    }
+}
+
+----------------------------------------
+

@@ -17,11 +17,15 @@ pub struct RpcUrlsConfig {
     pub tron_shasta: String,
     pub sui_testnet: String,
     pub bitcoin_testnet: String,
+    pub alpen_testnet: String,
+    pub bnbchain_testnet: String,
+    pub citrea_testnet: String,
+    pub monad_testnet: String,
+    pub xrpl_testnet: String,
 }
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WalletConfig {
     pub bitcoin_testnet_address: String,
-    pub litecoin_testnet_address: String,
     pub evm_address: String,
     pub evm_private_key: String,
     pub starknet_address: String,
@@ -109,8 +113,6 @@ impl AppConfig {
                 ),
                 evm_private_key: std::env::var("WALLET_EVM_PRIVATE_KEY")
                     .expect("WALLET_EVM_PRIVATE_KEY must be set"),
-                litecoin_testnet_address: std::env::var("WALLET_LITECOIN_TESTNET")
-                    .unwrap_or_else(|_| "tltc1qycexnc7fjqh2x4dnaht6gumcjxdzkdpjnlxe4s".to_string()),
                 evm_address: std::env::var("WALLET_EVM")
                     .unwrap_or_else(|_| "0x004Cc75ACF4132Fc08cB6a252E767804F303F729".to_string()),
                 starknet_address: std::env::var("WALLET_STARKNET").unwrap_or_else(|_| {
@@ -158,6 +160,16 @@ impl AppConfig {
                     .unwrap_or_else(|_| "https://fullnode.testnet.sui.io:443".to_string()),
                 bitcoin_testnet: std::env::var("RPC_BITCOIN_TESTNET")
                     .unwrap_or_else(|_| "https://blockstream.info/testnet/api".to_string()),
+                alpen_testnet: std::env::var("RPC_ALPEN_TESTNET")
+                    .unwrap_or_else(|_| "https://rpc.testnet.alpenlabs.io".to_string()),
+                bnbchain_testnet: std::env::var("RPC_BNBCHAIN_TESTNET")
+                    .unwrap_or_else(|_| "https://data-seed-prebsc-1-s1.binance.org:8545".to_string()),
+                citrea_testnet: std::env::var("RPC_CITREA_TESTNET")
+                    .unwrap_or_else(|_| "https://rpc.testnet.citrea.xyz".to_string()),
+                monad_testnet: std::env::var("RPC_MONAD_TESTNET")
+                    .unwrap_or_else(|_| "https://testnet.monad.xyz".to_string()),
+                xrpl_testnet: std::env::var("RPC_XRPL_TESTNET")
+                    .unwrap_or_else(|_| "https://s.altnet.rippletest.net:51234".to_string()),
             },
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "garden_swaps.db".to_string()),

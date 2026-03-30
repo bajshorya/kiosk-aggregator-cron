@@ -119,8 +119,7 @@ impl SwapRunner {
         let started_at = Utc::now();
         let all_pairs = all_swap_pairs(&self.config.wallets);
         
-        info!(run_id = %run_id, "=== Starting BATCHED swap test run ({} pairs) ===", all_pairs.len());
-        info!("Running swaps in batches of 10 to avoid overwhelming the system");
+        info!(run_id = %run_id, "=== Starting swap test run ({} pairs) ===", all_pairs.len());
 
         // Filter pairs based on available balance (only if check_balance is enabled)
         let executable_pairs = if check_balance {
@@ -178,53 +177,106 @@ impl SwapRunner {
             all_pairs.clone()
         };
 
-        let total = executable_pairs.len();
+        // Separate Bitcoin swaps from other swaps
+        let (bitcoin_pairs, other_pairs): (Vec<_>, Vec<_>) = executable_pairs
+            .into_iter()
+            .partition(|pair| {
+                let chain = pair.source.asset.split(':').next().unwrap_or("");
+                chain.starts_with("bitcoin_")
+            });
 
-        let batch_size = 10;
-        let mut records: Vec<SwapRecord> = Vec::with_capacity(total);
+        let total = bitcoin_pairs.len() + other_pairs.len();
+        
+        if !bitcoin_pairs.is_empty() {
+            info!(
+                "⚠️  Bitcoin UTXO conflict prevention: {} Bitcoin swaps will run SEQUENTIALLY (5s delay between each)",
+                bitcoin_pairs.len()
+            );
+            info!(
+                "✅ {} non-Bitcoin swaps will run CONCURRENTLY",
+                other_pairs.len()
+            );
+        } else {
+            info!("Spawning ALL {} swaps concurrently (no Bitcoin swaps)", total);
+        }
+        
+        let mut set: JoinSet<SwapRecord> = JoinSet::new();
 
-        // Process swaps in batches
-        for (batch_num, chunk) in executable_pairs.chunks(batch_size).enumerate() {
-            info!("Starting batch {}/{} ({} swaps)", batch_num + 1, (total + batch_size - 1) / batch_size, chunk.len());
+        // Spawn non-Bitcoin swaps concurrently
+        for pair in other_pairs {
+            let api = Arc::clone(&self.api);
+            let db = Arc::clone(&self.db);
+            let config = self.config.clone();
+            let run_id_c = run_id.clone();
+            let pair_c = pair.clone();
+
+            let evm_lock = Arc::clone(&self.evm_lock);
+            set.spawn(async move {
+                let runner = SwapRunner {
+                    api,
+                    db,
+                    config,
+                    evm_lock,
+                };
+                runner.run_single_swap(&run_id_c, &pair_c).await
+            });
+        }
+
+        // Spawn Bitcoin swaps SEQUENTIALLY with delays
+        let bitcoin_count = bitcoin_pairs.len();
+        if !bitcoin_pairs.is_empty() {
+            let api = Arc::clone(&self.api);
+            let db = Arc::clone(&self.db);
+            let config = self.config.clone();
+            let run_id_c = run_id.clone();
             
-            let mut set: JoinSet<SwapRecord> = JoinSet::new();
-
-            for pair in chunk {
-                let api = Arc::clone(&self.api);
-                let db = Arc::clone(&self.db);
-                let config = self.config.clone();
-                let run_id_c = run_id.clone();
-                let pair_c = pair.clone();
-
-                let evm_lock = Arc::clone(&self.evm_lock);
-                set.spawn(async move {
-                    let runner = SwapRunner {
-                        api,
-                        db,
-                        config,
-                        evm_lock,
-                    };
-                    runner.run_single_swap(&run_id_c, &pair_c).await
-                });
-            }
-
-            // Collect results for this batch
-            while let Some(res) = set.join_next().await {
-                match res {
-                    Ok(record) => {
-                        info!(
-                            pair = %record.swap_pair,
-                            status = %record.status,
-                            duration = ?record.duration_secs,
-                            "✅ Task finished"
-                        );
-                        records.push(record);
+            // Spawn a single task that runs all Bitcoin swaps sequentially
+            tokio::spawn(async move {
+                for (idx, pair) in bitcoin_pairs.iter().enumerate() {
+                    if idx > 0 {
+                        // Wait 5 seconds between Bitcoin swaps to allow:
+                        // 1. Previous transaction to broadcast
+                        // 2. Change UTXO to appear in mempool
+                        // 3. Next swap to fetch and use the new UTXO
+                        info!("⏱️  Waiting 5 seconds before next Bitcoin swap (UTXO reuse)...");
+                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     }
-                    Err(e) => error!("Swap task panicked: {}", e),
+                    
+                    let runner = SwapRunner {
+                        api: Arc::clone(&api),
+                        db: Arc::clone(&db),
+                        config: config.clone(),
+                        evm_lock: Arc::new(Mutex::new(())),
+                    };
+                    
+                    info!("🔶 Bitcoin swap {}/{}: {}", idx + 1, bitcoin_pairs.len(), pair.label());
+                    let _record = runner.run_single_swap(&run_id_c, pair).await;
+                    // Records are saved to DB by run_single_swap, we don't need to collect them here
                 }
-            }
+            });
+        }
 
-            info!("Batch {}/{} complete", batch_num + 1, (total + batch_size - 1) / batch_size);
+        // Collect all results as they complete
+        let mut records: Vec<SwapRecord> = Vec::with_capacity(total);
+        while let Some(res) = set.join_next().await {
+            match res {
+                Ok(record) => {
+                    info!(
+                        pair = %record.swap_pair,
+                        status = %record.status,
+                        duration = ?record.duration_secs,
+                        "✅ Task finished"
+                    );
+                    records.push(record);
+                }
+                Err(e) => error!("Swap task panicked: {}", e),
+            }
+        }
+
+        // Wait a bit for Bitcoin swaps to complete and save to DB
+        if bitcoin_count > 0 {
+            info!("⏱️  Waiting for Bitcoin swaps to complete...");
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
 
         let completed = records
@@ -495,7 +547,12 @@ impl SwapRunner {
         match chain {
             c if c.starts_with("ethereum_")
                 || c.starts_with("base_")
-                || c.starts_with("arbitrum_") =>
+                || c.starts_with("arbitrum_")
+                || c.starts_with("alpen_testnet")
+                || c.starts_with("bnbchain_")
+                || c.starts_with("citrea_")
+                || c.starts_with("monad_")
+                || c.starts_with("xrpl_") =>
             {
                 let signer = EvmSigner::new(self.config.wallets.evm_private_key.clone())?;
                 
@@ -838,17 +895,27 @@ impl SwapRunner {
                     anyhow::bail!("No UTXOs available for Bitcoin address {}", wallet_address);
                 }
 
+                let confirmed_count = all_utxos.iter().filter(|u| u.confirmed).count();
+                let unconfirmed_count = all_utxos.len() - confirmed_count;
+                let confirmed_total: u64 = all_utxos.iter().filter(|u| u.confirmed).map(|u| u.value).sum();
+                let unconfirmed_total: u64 = all_utxos.iter().filter(|u| !u.confirmed).map(|u| u.value).sum();
                 let total_available: u64 = all_utxos.iter().map(|u| u.value).sum();
+                
                 info!(
-                    "Found {} UTXOs with total {} sats",
+                    "Found {} UTXOs with total {} sats ({} confirmed: {} sats, {} unconfirmed: {} sats)",
                     all_utxos.len(),
-                    total_available
+                    total_available,
+                    confirmed_count,
+                    confirmed_total,
+                    unconfirmed_count,
+                    unconfirmed_total
                 );
 
                 // Estimate fee
                 let fee_rate = provider.estimate_fee().await.unwrap_or(2); // sats/vbyte
                 
                 // Select UTXOs - use only what we need (greedy algorithm)
+                // IMPORTANT: Include both confirmed AND unconfirmed UTXOs to enable continuous testing
                 let mut selected_utxos = Vec::new();
                 let mut selected_total: u64 = 0;
                 
@@ -872,13 +939,34 @@ impl SwapRunner {
                     }
                 }
 
+                // Log selected UTXOs with confirmation status
+                let selected_confirmed = selected_utxos.iter().filter(|u| u.confirmed).count();
+                let selected_unconfirmed = selected_utxos.len() - selected_confirmed;
                 info!(
                     "Selected {} UTXOs with total {} sats (need {} sats including fee)",
                     selected_utxos.len(),
                     selected_total,
                     amount_sats + estimated_fee
                 );
+                info!(
+                    "  └─ {} confirmed, {} unconfirmed (mempool) UTXOs",
+                    selected_confirmed,
+                    selected_unconfirmed
+                );
                 info!("Estimated fee: {} sats ({} sats/vbyte)", estimated_fee, fee_rate);
+                
+                // Log each selected UTXO
+                for (idx, utxo) in selected_utxos.iter().enumerate() {
+                    info!(
+                        "  UTXO #{}: {}...{} vout={} value={} sats [{}]",
+                        idx + 1,
+                        &utxo.txid[..8],
+                        &utxo.txid[utxo.txid.len()-8..],
+                        utxo.vout,
+                        utxo.value,
+                        if utxo.confirmed { "CONFIRMED" } else { "MEMPOOL" }
+                    );
+                }
 
                 if selected_total < amount_sats + estimated_fee {
                     anyhow::bail!(
@@ -925,6 +1013,11 @@ impl SwapRunner {
             "ethereum_sepolia" => Ok(self.config.rpc_urls.ethereum_sepolia.clone()),
             "base_sepolia" => Ok(self.config.rpc_urls.base_sepolia.clone()),
             "arbitrum_sepolia" => Ok(self.config.rpc_urls.arbitrum_sepolia.clone()),
+            "alpen_testnet" => Ok(self.config.rpc_urls.alpen_testnet.clone()),
+            "bnbchain_testnet" => Ok(self.config.rpc_urls.bnbchain_testnet.clone()),
+            "citrea_testnet" => Ok(self.config.rpc_urls.citrea_testnet.clone()),
+            "monad_testnet" => Ok(self.config.rpc_urls.monad_testnet.clone()),
+            "xrpl_testnet" => Ok(self.config.rpc_urls.xrpl_testnet.clone()),
             _ => Err(anyhow::anyhow!(
                 "No RPC URL configured for chain: {}",
                 chain

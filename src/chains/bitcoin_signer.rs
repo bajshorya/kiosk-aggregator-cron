@@ -15,6 +15,8 @@ pub struct BitcoinUTXO {
     pub vout: u32,
     pub value: u64, // in satoshis
     pub script_pubkey: String,
+    #[serde(default)]
+    pub confirmed: bool, // Track if UTXO is confirmed or in mempool
 }
 
 pub struct BitcoinSigner {

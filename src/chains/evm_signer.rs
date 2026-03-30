@@ -116,6 +116,50 @@ impl EvmSigner {
 
         let tx_hash = format!("{:?}", pending_tx.tx_hash());
         info!("Transaction sent: {}", tx_hash);
+        
+        // Verify transaction is in mempool
+        info!("Verifying transaction is in mempool...");
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.get_transaction(pending_tx.tx_hash())
+        ).await {
+            Ok(Ok(Some(tx))) => {
+                info!("✅ Transaction found in mempool");
+                info!("From: {:?}, To: {:?}, Value: {}", tx.from, tx.to, tx.value);
+                info!("Nonce: {}, Gas: {}", tx.nonce, tx.gas);
+            }
+            Ok(Ok(None)) => {
+                info!("⚠️  WARNING: Transaction NOT found in mempool! May have been dropped.");
+            }
+            Ok(Err(e)) => {
+                info!("⚠️  Error checking mempool: {}", e);
+            }
+            Err(_) => {
+                info!("⏱️  Mempool check timed out");
+            }
+        }
+        
+        // Wait for transaction to be mined (with timeout)
+        info!("Waiting for transaction to be mined (30s timeout)...");
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            pending_tx
+        ).await {
+            Ok(Ok(Some(receipt))) => {
+                info!("✅ Transaction mined in block {}", receipt.block_number.unwrap_or_default());
+                info!("Gas used: {}", receipt.gas_used.unwrap_or_default());
+                info!("Status: {}", if receipt.status == Some(1.into()) { "SUCCESS" } else { "FAILED" });
+            }
+            Ok(Ok(None)) => {
+                info!("⚠️  Transaction sent but receipt not available yet");
+            }
+            Ok(Err(e)) => {
+                info!("⚠️  Error waiting for receipt: {}", e);
+            }
+            Err(_) => {
+                info!("⏱️  Transaction confirmation timed out after 30s (may still be pending)");
+            }
+        }
 
         Ok(tx_hash)
     }
