@@ -2,6 +2,7 @@ mod api;
 mod chains;
 mod config;
 mod db;
+mod discord;
 mod models;
 mod scheduler;
 
@@ -182,6 +183,20 @@ async fn main() -> Result<()> {
                 );
             }
             println!();
+        }
+
+        // Start Discord bot
+        "discord-bot" => {
+            info!("Mode: discord-bot — starting Discord bot");
+            
+            // Load Discord token from environment
+            let token = std::env::var("DISCORD_TOKEN")
+                .map_err(|_| anyhow::anyhow!("DISCORD_TOKEN environment variable not set"))?;
+            
+            println!("Starting Discord bot...");
+            println!("Press Ctrl+C to stop.\n");
+            
+            discord::start_discord_bot(token).await?;
         }
 
         // Default: start the cron scheduler
