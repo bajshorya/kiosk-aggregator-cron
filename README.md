@@ -10,6 +10,7 @@ A comprehensive testing tool for the [Garden Finance](https://garden.finance) cr
 - ✅ **Chain-Specific Handling** - Automatic detection of deposit requirements
 - ✅ **Comprehensive Logging** - Detailed progress tracking with transaction hashes
 - ✅ **Multiple Execution Modes** - Run all, test single swap, scheduler, or view history
+- ✅ **Discord Bot Integration** - Execute swap tests remotely via Discord slash commands
 - ✅ **Testnet Support** - Fully configured for testnet environments
 
 ## Supported Chains
@@ -163,6 +164,21 @@ cargo run --release -- scheduler
 ```
 
 The scheduler will execute all swaps according to the `SCHEDULER_CRON` setting in `.env`.
+
+### 6. Discord Bot Mode
+
+Run the Discord bot to execute swap tests remotely via Discord slash commands:
+
+```bash
+cargo run -- discord-bot
+```
+
+See [Discord Bot Quick Start](docs/DISCORD_BOT_QUICK_START.md) for setup instructions.
+
+**Available Discord Commands:**
+- `/ping` - Health check
+- `/test-swap from_asset:ethereum_sepolia:eth to_asset:base_sepolia:wbtc` - Test single swap
+- `/test-swap-all` - Run all swaps in batch mode
 
 ## Swap Amounts
 
@@ -354,6 +370,8 @@ All swaps use testnet tokens with minimal amounts for testing.
 ## Documentation
 
 - **[Quick Start Guide](docs/QUICK_START.md)** - Get started in 5 minutes
+- **[Discord Bot Quick Start](docs/DISCORD_BOT_QUICK_START.md)** - Set up Discord bot in 5 minutes
+- **[Discord Bot Documentation](docs/DISCORD_BOT.md)** - Complete Discord bot guide
 - **[Usage Examples](docs/EXAMPLES.md)** - Common use cases and commands
 - **[Cost Optimization](docs/COST_OPTIMIZATION.md)** - Minimize spending strategy
 - **[Implementation Details](docs/IMPLEMENTATION_COMPLETE.md)** - Technical overview
