@@ -20,6 +20,7 @@ pub async fn start_discord_bot(token: String) -> Result<()> {
                 commands::ping(),
                 commands::test_swap(),
                 commands::test_swap_all(),
+                commands::list_swaps(),
             ],
             ..Default::default()
         })

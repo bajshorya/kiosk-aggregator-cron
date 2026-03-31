@@ -464,11 +464,32 @@ impl SwapRunner {
         let timeout = self.config.swap_timeout();
         let poll_every = self.config.poll_interval();
         let deadline = Instant::now() + timeout;
+        let start_time = Instant::now();
         let mut poll_count: u32 = 0;
+        let mut last_timer_secs: u64 = 0;
 
         loop {
             sleep(poll_every).await;
             poll_count += 1;
+            
+            // Print timer update every 30 seconds
+            let elapsed = start_time.elapsed();
+            let elapsed_secs = elapsed.as_secs();
+            
+            // Show timer every 30 seconds
+            if elapsed_secs >= last_timer_secs + 30 {
+                let remaining_secs = timeout.as_secs().saturating_sub(elapsed_secs);
+                println!(
+                    "⏱️  [{}] {}m {}s elapsed, ~{}m {}s remaining (poll #{})",
+                    pair.label(),
+                    elapsed_secs / 60,
+                    elapsed_secs % 60,
+                    remaining_secs / 60,
+                    remaining_secs % 60,
+                    poll_count
+                );
+                last_timer_secs = elapsed_secs;
+            }
 
             if Instant::now() >= deadline {
                 warn!(

@@ -19,6 +19,9 @@ use scheduler::{runner::SwapRunner, start_scheduler};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load .env file first, before anything else
+    dotenv::dotenv().ok();
+    
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -188,6 +191,26 @@ async fn main() -> Result<()> {
         // Start Discord bot
         "discord-bot" => {
             info!("Mode: discord-bot — starting Discord bot");
+            
+            // Debug: Check if DISCORD_TOKEN is in environment after dotenv load
+            match std::env::var("DISCORD_TOKEN") {
+                Ok(ref token) => {
+                    info!("DISCORD_TOKEN found in environment (length: {})", token.len());
+                }
+                Err(_) => {
+                    error!("DISCORD_TOKEN not found in environment");
+                    // Try to load .env again explicitly
+                    dotenv::dotenv().ok();
+                    match std::env::var("DISCORD_TOKEN") {
+                        Ok(ref token) => {
+                            info!("DISCORD_TOKEN found after second dotenv load (length: {})", token.len());
+                        }
+                        Err(_) => {
+                            error!("DISCORD_TOKEN still not found after second dotenv load");
+                        }
+                    }
+                }
+            }
             
             // Load Discord token from environment
             let token = std::env::var("DISCORD_TOKEN")
