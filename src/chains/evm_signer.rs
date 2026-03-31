@@ -84,12 +84,68 @@ impl EvmSigner {
             .context("Failed to connect to RPC")?;
         let client = SignerMiddleware::new(provider, self.wallet.clone().with_chain_id(chain_id));
 
+        // Get current gas price and add 50% buffer for EIP-1559 chains
+        let gas_params = match tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.estimate_eip1559_fees(None)
+        ).await {
+            Ok(Ok((max_fee, max_priority_fee))) => {
+                // Add 50% buffer to handle gas price fluctuations
+                let buffered_max_fee = max_fee * 150 / 100;
+                let buffered_priority = max_priority_fee * 150 / 100;
+                info!("EIP-1559 gas: maxFee={} wei, maxPriority={} wei (with 50% buffer)", buffered_max_fee, buffered_priority);
+                Some((buffered_max_fee, buffered_priority))
+            }
+            Ok(Err(e)) => {
+                info!("EIP-1559 estimation failed ({}), will use legacy gas price", e);
+                None
+            }
+            Err(_) => {
+                info!("Gas estimation timed out, will use legacy gas price");
+                None
+            }
+        };
+
         // Build transaction
-        let tx = TransactionRequest::new()
-            .to(to)
-            .data(data)
-            .value(value)
-            .gas(gas_limit);
+        let tx = if let Some((max_fee, max_priority)) = gas_params {
+            // EIP-1559 transaction
+            Eip1559TransactionRequest::new()
+                .to(to)
+                .data(data)
+                .value(value)
+                .gas(gas_limit)
+                .max_fee_per_gas(max_fee)
+                .max_priority_fee_per_gas(max_priority)
+                .into()
+        } else {
+            // Legacy transaction with buffered gas price
+            let gas_price = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                client.get_gas_price()
+            ).await {
+                Ok(Ok(price)) => {
+                    let buffered = price * 150 / 100;
+                    info!("Legacy gas price: {} wei (with 50% buffer)", buffered);
+                    Some(buffered)
+                }
+                _ => {
+                    info!("Gas price fetch failed, using default");
+                    None
+                }
+            };
+            
+            let mut tx = TransactionRequest::new()
+                .to(to)
+                .data(data)
+                .value(value)
+                .gas(gas_limit);
+            
+            if let Some(price) = gas_price {
+                tx = tx.gas_price(price);
+            }
+            
+            tx
+        };
 
         info!("Broadcasting transaction to chain_id={}", chain_id);
         

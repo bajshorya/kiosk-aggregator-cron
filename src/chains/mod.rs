@@ -55,50 +55,89 @@ pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
         // ═══════════════════════════════════════════════════════════════════
         // VERIFIED WORKING SWAP PAIRS (tested and confirmed)
         // ═══════════════════════════════════════════════════════════════════
-        
-        // ✅ Ethereum Sepolia → Solana (WORKING - non-gasless)
-        pair!("ethereum_sepolia:eth", "5000000000000000", evm, "solana_testnet:sol", sol),
-        
+
+        // ✅ Ethereum Sepolia → Others (WORKING - non-gasless)
+        pair!("ethereum_sepolia:eth", "5100000000000000", evm, "solana_testnet:sol", sol),
+        pair!("ethereum_sepolia:eth", "5100000000000000", evm, "starknet_sepolia:eth", stark),
+
         // ✅ Arbitrum Sepolia → Others (WORKING - you have USDC tokens)
-        pair!("arbitrum_sepolia:usdc", "15000000", evm, "solana_testnet:usdc", sol),
-        pair!("arbitrum_sepolia:usdc", "15000000", evm, "alpen_testnet:usdc", evm),
-        pair!("arbitrum_sepolia:usdc", "15000000", evm, "bnbchain_testnet:wbtc", evm),
-        pair!("arbitrum_sepolia:usdc", "15000000", evm, "bitcoin_testnet:btc", btc),
-        pair!("arbitrum_sepolia:usdc", "15000000", evm, "citrea_testnet:usdc", evm),
-        pair!("arbitrum_sepolia:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
-        
-        // ✅ Citrea Testnet → Others (WORKING - gasless enabled, 2/4 pairs work)
-        pair!("citrea_testnet:usdc", "15000000", evm, "solana_testnet:usdc", sol),
-        pair!("citrea_testnet:usdc", "15000000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("arbitrum_sepolia:usdc", "15300000", evm, "solana_testnet:usdc", sol),
+        pair!("arbitrum_sepolia:usdc", "15300000", evm, "alpen_testnet:usdc", evm),
+        pair!("arbitrum_sepolia:usdc", "15300000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("arbitrum_sepolia:usdc", "15300000", evm, "bitcoin_testnet:btc", btc),
+        pair!("arbitrum_sepolia:usdc", "15300000", evm, "citrea_testnet:usdc", evm),
+        pair!("arbitrum_sepolia:usdc", "15300000", evm, "starknet_sepolia:wbtc", stark),
+
+        // ✅ Citrea Testnet → Others (WORKING - gasless enabled)
+        pair!("citrea_testnet:usdc", "15300000", evm, "solana_testnet:usdc", sol),
+        pair!("citrea_testnet:usdc", "15300000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("citrea_testnet:usdc", "15300000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("citrea_testnet:usdc", "15300000", evm, "bitcoin_testnet:btc", btc),
+        pair!("citrea_testnet:usdc", "15300000", evm, "ethereum_sepolia:eth", evm),
+        pair!("citrea_testnet:usdc", "15300000", evm, "arbitrum_sepolia:usdc", evm),
+        pair!("citrea_testnet:usdc", "15300000", evm, "base_sepolia:usdc", evm),
+        pair!("citrea_testnet:cbtc", "51000", evm, "bitcoin_testnet:btc", btc),
+        pair!("citrea_testnet:cbtc", "51000", evm, "solana_testnet:usdc", sol),
+        pair!("citrea_testnet:cbtc", "51000", evm, "ethereum_sepolia:eth", evm),
+        pair!("citrea_testnet:cbtc", "51000", evm, "starknet_sepolia:wbtc", stark),
         
         // ✅ Solana Testnet → Others (WORKING - all gasless)
-        pair!("solana_testnet:sol", "100000000", sol, "ethereum_sepolia:eth", evm),
-        pair!("solana_testnet:usdc", "50000000", sol, "alpen_testnet:usdc", evm),
-        pair!("solana_testnet:usdc", "50000000", sol, "bnbchain_testnet:wbtc", evm),
-        pair!("solana_testnet:usdc", "50000000", sol, "bitcoin_testnet:btc", btc),
+        pair!("solana_testnet:sol", "1020000", sol, "ethereum_sepolia:eth", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "alpen_testnet:usdc", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "bnbchain_testnet:wbtc", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "bitcoin_testnet:btc", btc),
+        pair!("solana_testnet:usdc", "51000000", sol, "starknet_sepolia:wbtc", stark),
+        pair!("solana_testnet:usdc", "51000000", sol, "citrea_testnet:usdc", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "citrea_testnet:cbtc", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "ethereum_sepolia:eth", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "arbitrum_sepolia:usdc", evm),
+        pair!("solana_testnet:usdc", "51000000", sol, "base_sepolia:usdc", evm),
+        pair!("solana_testnet:wbtc", "51000", sol, "bitcoin_testnet:btc", btc),
+        pair!("solana_testnet:wbtc", "51000", sol, "ethereum_sepolia:eth", evm),
+        pair!("solana_testnet:wbtc", "51000", sol, "citrea_testnet:cbtc", evm),
+        pair!("solana_testnet:wbtc", "51000", sol, "starknet_sepolia:wbtc", stark),
+        
+        // ✅ Base Sepolia (Coinbase L2) → Others
+        pair!("base_sepolia:usdc", "25500000", evm, "solana_testnet:usdc", sol),
+        pair!("base_sepolia:usdc", "25500000", evm, "ethereum_sepolia:eth", evm),
+        pair!("base_sepolia:usdc", "25500000", evm, "arbitrum_sepolia:usdc", evm),
+        pair!("base_sepolia:usdc", "25500000", evm, "citrea_testnet:usdc", evm),
+        pair!("base_sepolia:usdc", "25500000", evm, "bitcoin_testnet:btc", btc),
+        pair!("base_sepolia:usdc", "25500000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("base_sepolia:usdc", "25500000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("base_sepolia:wbtc", "51000", evm, "bitcoin_testnet:btc", btc),
+        pair!("base_sepolia:wbtc", "51000", evm, "solana_testnet:wbtc", sol),
+        pair!("base_sepolia:wbtc", "51000", evm, "citrea_testnet:cbtc", evm),
+        pair!("base_sepolia:wbtc", "51000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("base_sepolia:cbltc", "51000", evm, "bitcoin_testnet:btc", btc),
+        pair!("base_sepolia:cbltc", "51000", evm, "solana_testnet:usdc", sol),
+        pair!("base_sepolia:cbltc", "51000", evm, "ethereum_sepolia:eth", evm),
+        pair!("base_sepolia:usdt", "25500000", evm, "solana_testnet:usdc", sol),
+        pair!("base_sepolia:usdt", "25500000", evm, "ethereum_sepolia:eth", evm),
+        pair!("base_sepolia:usdt", "25500000", evm, "arbitrum_sepolia:usdc", evm),
 
         // ✅ Bitcoin Testnet → Others (WORKING - sequential execution with UTXO reuse)
-        pair!("bitcoin_testnet:btc", "50000", btc, "ethereum_sepolia:eth", evm),
-        pair!("bitcoin_testnet:btc", "50000", btc, "solana_testnet:usdc", sol),
-        pair!("bitcoin_testnet:btc", "50000", btc, "alpen_testnet:usdc", evm),
-        pair!("bitcoin_testnet:btc", "50000", btc, "bnbchain_testnet:wbtc", evm),
-        pair!("bitcoin_testnet:btc", "50000", btc, "citrea_testnet:usdc", evm),
-        pair!("bitcoin_testnet:btc", "50000", btc, "starknet_sepolia:wbtc", stark),
+        pair!("bitcoin_testnet:btc", "51000", btc, "ethereum_sepolia:eth", evm),
+        pair!("bitcoin_testnet:btc", "51000", btc, "solana_testnet:usdc", sol),
+        pair!("bitcoin_testnet:btc", "51000", btc, "alpen_testnet:usdc", evm),
+        pair!("bitcoin_testnet:btc", "51000", btc, "bnbchain_testnet:wbtc", evm),
+        pair!("bitcoin_testnet:btc", "51000", btc, "citrea_testnet:usdc", evm),
+        pair!("bitcoin_testnet:btc", "51000", btc, "starknet_sepolia:wbtc", stark),
 
         // ═══════════════════════════════════════════════════════════════════
         // COMMENTED OUT - FAILING SWAP PAIRS
         // ═══════════════════════════════════════════════════════════════════
 
         // ❌ Ethereum Sepolia USDC - DISABLED (insufficient balance, skipped by balance checker)
-        // pair!("ethereum_sepolia:usdc", "15000000", evm, "alpen_testnet:usdc", evm),
-        // pair!("ethereum_sepolia:usdc", "15000000", evm, "bnbchain_testnet:wbtc", evm),
-        // pair!("ethereum_sepolia:usdc", "15000000", evm, "bitcoin_testnet:btc", btc),
+        pair!("ethereum_sepolia:usdc", "15300000", evm, "alpen_testnet:usdc", evm),
+        pair!("ethereum_sepolia:usdc", "15300000", evm, "bnbchain_testnet:wbtc", evm),
+        pair!("ethereum_sepolia:usdc", "15300000", evm, "bitcoin_testnet:btc", btc),
 
         // ❌ Citrea → Alpen - DISABLED (gasless "Invalid swap request", fallback also fails)
-        // pair!("citrea_testnet:usdc", "15000000", evm, "alpen_testnet:usdc", evm),
+        pair!("citrea_testnet:usdc", "15300000", evm, "alpen_testnet:usdc", evm),
 
         // ❌ Citrea → Starknet - DISABLED (gasless "Invalid swap request", fallback "replacement transaction underpriced")
-        // pair!("citrea_testnet:usdc", "15000000", evm, "starknet_sepolia:wbtc", stark),
+        pair!("citrea_testnet:usdc", "15300000", evm, "starknet_sepolia:wbtc", stark),
 
         // ❌ Alpen Testnet as SOURCE - DISABLED (insufficient gas for approval)
         // pair!("alpen_testnet:sbtc",  "50000",    evm, "base_sepolia:usdc",      evm),
@@ -136,18 +175,18 @@ pub fn all_swap_pairs(wallets: &WalletConfig) -> Vec<SwapPair> {
 
     if enable_round_trips {
         let round_trips = vec![
-            pair!("solana_testnet:sol",    "100000000", sol, "ethereum_sepolia:eth",   evm),
-            pair!("base_sepolia:usdc",     "15000000",  evm, "arbitrum_sepolia:usdc",  evm),
-            pair!("ethereum_sepolia:usdc", "15000000",  evm, "arbitrum_sepolia:usdc",  evm),
-            pair!("arbitrum_sepolia:usdc", "15000000",  evm, "ethereum_sepolia:usdc",  evm),
-            pair!("solana_testnet:usdc",   "15000000",  sol, "arbitrum_sepolia:usdc",  evm),
-            pair!("solana_testnet:usdc",   "15000000",  sol, "base_sepolia:usdc",      evm),
-            pair!("solana_testnet:usdc",   "15000000",  sol, "ethereum_sepolia:usdc",  evm),
-            pair!("ethereum_sepolia:wbtc", "50000",     evm, "arbitrum_sepolia:wbtc",  evm),
-            pair!("base_sepolia:wbtc",     "50000",     evm, "arbitrum_sepolia:wbtc",  evm),
-            pair!("arbitrum_sepolia:wbtc", "50000",     evm, "bitcoin_testnet:btc",    btc),
-            pair!("base_sepolia:wbtc",     "50000",     evm, "bitcoin_testnet:btc",    btc),
-            pair!("ethereum_sepolia:wbtc", "50000",     evm, "bitcoin_testnet:btc",    btc),
+            pair!("solana_testnet:sol",    "1020000",   sol, "ethereum_sepolia:eth",   evm),
+            pair!("base_sepolia:usdc",     "25500000",  evm, "arbitrum_sepolia:usdc",  evm),
+            pair!("ethereum_sepolia:usdc", "15300000",  evm, "arbitrum_sepolia:usdc",  evm),
+            pair!("arbitrum_sepolia:usdc", "15300000",  evm, "ethereum_sepolia:usdc",  evm),
+            pair!("solana_testnet:usdc",   "51000000",  sol, "arbitrum_sepolia:usdc",  evm),
+            pair!("solana_testnet:usdc",   "51000000",  sol, "base_sepolia:usdc",      evm),
+            pair!("solana_testnet:usdc",   "51000000",  sol, "ethereum_sepolia:usdc",  evm),
+            pair!("ethereum_sepolia:wbtc", "51000",     evm, "arbitrum_sepolia:wbtc",  evm),
+            pair!("base_sepolia:wbtc",     "51000",     evm, "arbitrum_sepolia:wbtc",  evm),
+            pair!("arbitrum_sepolia:wbtc", "51000",     evm, "bitcoin_testnet:btc",    btc),
+            pair!("base_sepolia:wbtc",     "51000",     evm, "bitcoin_testnet:btc",    btc),
+            pair!("ethereum_sepolia:wbtc", "51000",     evm, "bitcoin_testnet:btc",    btc),
         ];
         let n = round_trips.len();
         pairs.extend(round_trips);

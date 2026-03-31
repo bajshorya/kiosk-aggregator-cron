@@ -72,7 +72,10 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self> {
-        dotenv::dotenv().ok();
+        match dotenv::dotenv() {
+            Ok(path) => eprintln!("✅ Loaded .env from: {:?}", path),
+            Err(e) => eprintln!("⚠️  No .env file loaded: {}", e),
+        }
         
         // Debug: Check if SOLANA_PRIVATE_KEY is in environment
         let solana_key = std::env::var("SOLANA_PRIVATE_KEY").ok();
